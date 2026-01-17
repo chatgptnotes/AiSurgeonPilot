@@ -34,7 +34,13 @@ import {
   FolderOpen,
   Download,
   Eye,
+  Upload,
+  Loader2,
 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type {
   Patient,
   PatientDoctorSelection,
@@ -77,7 +83,15 @@ export default function PatientDetailPage() {
   const [medications, setMedications] = useState<PatientMedication[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [documents, setDocuments] = useState<any[]>([])
+  const [doctorDocuments, setDoctorDocuments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Upload prescription state
+  const [uploadingDocument, setUploadingDocument] = useState(false)
+  const [uploadForm, setUploadForm] = useState({
+    documentType: 'prescription',
+    description: ''
+  })
 
   useEffect(() => {
     const fetchPatientData = async () => {
@@ -145,7 +159,13 @@ export default function PatientDetailPage() {
       if (allergiesRes.data) setAllergies(allergiesRes.data)
       if (medsRes.data) setMedications(medsRes.data)
       if (appointmentsRes.data) setAppointments(appointmentsRes.data)
-      if (documentsRes.data) setDocuments(documentsRes.data)
+      if (documentsRes.data) {
+        // Separate patient and doctor uploaded documents
+        const patientDocs = documentsRes.data.filter((doc: any) => doc.uploaded_by === 'patient' || !doc.uploaded_by)
+        const doctorDocs = documentsRes.data.filter((doc: any) => doc.uploaded_by === 'doctor')
+        setDocuments(patientDocs)
+        setDoctorDocuments(doctorDocs)
+      }
 
       setLoading(false)
     }
@@ -168,6 +188,60 @@ export default function PatientDetailPage() {
       age--
     }
     return age
+  }
+
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !doctor || !patientId) return
+
+    setUploadingDocument(true)
+    try {
+      const supabase = createClient()
+
+      // Sanitize file name
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+      // Store in doctor-prescriptions bucket: doctor/{doctorId}/{patientId}/{timestamp}_{filename}
+      const filePath = `${doctor.id}/${patientId}/${Date.now()}_${sanitizedName}`
+
+      // Upload file to doctor-prescriptions bucket (separate bucket with public read access)
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('doctor-prescriptions')
+        .upload(filePath, file)
+
+      if (uploadError) throw uploadError
+
+      // Create document record
+      const { data: docData, error: docError } = await supabase
+        .from('doc_patient_reports')
+        .insert({
+          doc_patient_id: patientId,
+          doctor_id: doctor.id,
+          file_type: uploadForm.documentType,
+          file_name: file.name,
+          file_url: uploadData.path,
+          uploaded_by: 'doctor',
+          description: uploadForm.description || null
+        })
+        .select()
+        .single()
+
+      if (docError) throw docError
+
+      // Add to doctor documents list
+      setDoctorDocuments(prev => [docData, ...prev])
+
+      // Reset form
+      setUploadForm({ documentType: 'prescription', description: '' })
+      // Reset file input
+      e.target.value = ''
+
+      toast.success('Document uploaded successfully')
+    } catch (error) {
+      console.error('Error uploading document:', error)
+      toast.error('Failed to upload document')
+    } finally {
+      setUploadingDocument(false)
+    }
   }
 
   if (authLoading || loading) {
@@ -293,7 +367,7 @@ export default function PatientDetailPage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="history">Medical History</TabsTrigger>
             <TabsTrigger value="appointments">Appointments ({appointments.length})</TabsTrigger>
-            <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
+            <TabsTrigger value="documents">Documents ({documents.length + doctorDocuments.length})</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -570,18 +644,150 @@ export default function PatientDetailPage() {
           </TabsContent>
 
           {/* Documents Tab */}
-          <TabsContent value="documents">
+          <TabsContent value="documents" className="space-y-6">
+            {/* Upload Prescription Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Upload className="h-5 w-5 text-green-500" />
+                  Upload Prescription / Document
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="documentType">Document Type</Label>
+                      <Select
+                        value={uploadForm.documentType}
+                        onValueChange={(value) => setUploadForm({ ...uploadForm, documentType: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="prescription">Prescription</SelectItem>
+                          <SelectItem value="lab_report">Lab Report</SelectItem>
+                          <SelectItem value="referral">Referral Letter</SelectItem>
+                          <SelectItem value="medical_certificate">Medical Certificate</SelectItem>
+                          <SelectItem value="diagnosis">Diagnosis Report</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description (Optional)</Label>
+                      <Input
+                        id="description"
+                        placeholder="Brief description..."
+                        value={uploadForm.description}
+                        onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="file">Select File</Label>
+                    <div className="flex items-center gap-4">
+                      <Input
+                        id="file"
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                        onChange={handleDocumentUpload}
+                        disabled={uploadingDocument}
+                        className="flex-1"
+                      />
+                      {uploadingDocument && (
+                        <div className="flex items-center gap-2 text-green-600">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm">Uploading...</span>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Supported formats: PDF, JPG, PNG, DOC, DOCX
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Doctor Uploaded Documents */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-green-500" />
+                  Your Uploaded Documents ({doctorDocuments.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {doctorDocuments.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="h-10 w-10 mx-auto mb-3 text-gray-300" />
+                    <p className="text-gray-500">No documents uploaded yet</p>
+                    <p className="text-sm text-gray-400">Upload prescriptions or reports for this patient above</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {doctorDocuments.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-100"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="p-2 bg-green-100 rounded-lg">
+                            <FileText className="h-6 w-6 text-green-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{doc.file_name}</p>
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                              <Badge className="bg-green-100 text-green-800 text-xs">
+                                {doc.file_type}
+                              </Badge>
+                              <span>Uploaded {format(new Date(doc.created_at), 'MMM d, yyyy')}</span>
+                            </div>
+                            {doc.description && (
+                              <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={async () => {
+                            const supabase = createClient()
+                            const { data } = await supabase.storage
+                              .from('doctor-prescriptions')
+                              .createSignedUrl(doc.file_url, 3600)
+                            if (data?.signedUrl) {
+                              window.open(data.signedUrl, '_blank')
+                            } else {
+                              toast.error('Could not open document')
+                            }
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                          View
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Patient Uploaded Documents */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FolderOpen className="h-5 w-5 text-purple-500" />
-                  Patient Uploaded Documents
+                  Patient Uploaded Documents ({documents.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {documents.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FolderOpen className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <div className="text-center py-8">
+                    <FolderOpen className="h-10 w-10 mx-auto mb-3 text-gray-300" />
                     <p className="text-gray-500">No documents uploaded by this patient</p>
                   </div>
                 ) : (
