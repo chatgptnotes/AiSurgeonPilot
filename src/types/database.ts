@@ -425,6 +425,196 @@ export interface Database {
           created_at?: string
         }
       }
+      doc_patients: {
+        Row: {
+          id: string
+          user_id: string
+          email: string
+          first_name: string
+          last_name: string
+          phone_number: string | null
+          date_of_birth: string
+          gender: 'male' | 'female' | 'other'
+          blood_group: 'A+' | 'A-' | 'B+' | 'B-' | 'O+' | 'O-' | 'AB+' | 'AB-' | null
+          height_cm: number | null
+          weight_kg: number | null
+          marital_status: 'single' | 'married' | 'divorced' | 'widowed' | null
+          profile_image_url: string | null
+          is_profile_complete: boolean
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          email: string
+          first_name: string
+          last_name: string
+          phone_number?: string | null
+          date_of_birth: string
+          gender: 'male' | 'female' | 'other'
+          blood_group?: 'A+' | 'A-' | 'B+' | 'B-' | 'O+' | 'O-' | 'AB+' | 'AB-' | null
+          height_cm?: number | null
+          weight_kg?: number | null
+          marital_status?: 'single' | 'married' | 'divorced' | 'widowed' | null
+          profile_image_url?: string | null
+          is_profile_complete?: boolean
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          email?: string
+          first_name?: string
+          last_name?: string
+          phone_number?: string | null
+          date_of_birth?: string
+          gender?: 'male' | 'female' | 'other'
+          blood_group?: 'A+' | 'A-' | 'B+' | 'B-' | 'O+' | 'O-' | 'AB+' | 'AB-' | null
+          height_cm?: number | null
+          weight_kg?: number | null
+          marital_status?: 'single' | 'married' | 'divorced' | 'widowed' | null
+          profile_image_url?: string | null
+          is_profile_complete?: boolean
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      doc_patient_doctor_selections: {
+        Row: {
+          id: string
+          patient_id: string
+          doctor_id: string
+          is_primary_doctor: boolean
+          selection_reason: string | null
+          status: 'active' | 'inactive'
+          selected_at: string
+        }
+        Insert: {
+          id?: string
+          patient_id: string
+          doctor_id: string
+          is_primary_doctor?: boolean
+          selection_reason?: string | null
+          status?: 'active' | 'inactive'
+          selected_at?: string
+        }
+        Update: {
+          id?: string
+          patient_id?: string
+          doctor_id?: string
+          is_primary_doctor?: boolean
+          selection_reason?: string | null
+          status?: 'active' | 'inactive'
+          selected_at?: string
+        }
+      }
+      doc_patient_medical_history: {
+        Row: {
+          id: string
+          patient_id: string
+          condition_name: string
+          condition_type: 'chronic' | 'past' | 'ongoing' | 'genetic' | null
+          diagnosed_date: string | null
+          notes: string | null
+          is_current: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          patient_id: string
+          condition_name: string
+          condition_type?: 'chronic' | 'past' | 'ongoing' | 'genetic' | null
+          diagnosed_date?: string | null
+          notes?: string | null
+          is_current?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          patient_id?: string
+          condition_name?: string
+          condition_type?: 'chronic' | 'past' | 'ongoing' | 'genetic' | null
+          diagnosed_date?: string | null
+          notes?: string | null
+          is_current?: boolean
+          created_at?: string
+        }
+      }
+      doc_patient_allergies: {
+        Row: {
+          id: string
+          patient_id: string
+          allergy_type: 'drug' | 'food' | 'environmental' | 'other'
+          allergy_name: string
+          severity: 'mild' | 'moderate' | 'severe' | null
+          reaction_description: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          patient_id: string
+          allergy_type: 'drug' | 'food' | 'environmental' | 'other'
+          allergy_name: string
+          severity?: 'mild' | 'moderate' | 'severe' | null
+          reaction_description?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          patient_id?: string
+          allergy_type?: 'drug' | 'food' | 'environmental' | 'other'
+          allergy_name?: string
+          severity?: 'mild' | 'moderate' | 'severe' | null
+          reaction_description?: string | null
+          created_at?: string
+        }
+      }
+      doc_patient_medications: {
+        Row: {
+          id: string
+          patient_id: string
+          medication_name: string
+          dosage: string | null
+          frequency: string | null
+          start_date: string | null
+          end_date: string | null
+          prescribing_doctor: string | null
+          is_current: boolean
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          patient_id: string
+          medication_name: string
+          dosage?: string | null
+          frequency?: string | null
+          start_date?: string | null
+          end_date?: string | null
+          prescribing_doctor?: string | null
+          is_current?: boolean
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          patient_id?: string
+          medication_name?: string
+          dosage?: string | null
+          frequency?: string | null
+          start_date?: string | null
+          end_date?: string | null
+          prescribing_doctor?: string | null
+          is_current?: boolean
+          notes?: string | null
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -477,3 +667,23 @@ export type EducationContentUpdate = Database['public']['Tables']['doc_education
 export type SurgeryOption = Database['public']['Tables']['doc_surgery_options']['Row']
 export type SurgeryOptionInsert = Database['public']['Tables']['doc_surgery_options']['Insert']
 export type SurgeryOptionUpdate = Database['public']['Tables']['doc_surgery_options']['Update']
+
+export type Patient = Database['public']['Tables']['doc_patients']['Row']
+export type PatientInsert = Database['public']['Tables']['doc_patients']['Insert']
+export type PatientUpdate = Database['public']['Tables']['doc_patients']['Update']
+
+export type PatientDoctorSelection = Database['public']['Tables']['doc_patient_doctor_selections']['Row']
+export type PatientDoctorSelectionInsert = Database['public']['Tables']['doc_patient_doctor_selections']['Insert']
+export type PatientDoctorSelectionUpdate = Database['public']['Tables']['doc_patient_doctor_selections']['Update']
+
+export type PatientMedicalHistory = Database['public']['Tables']['doc_patient_medical_history']['Row']
+export type PatientMedicalHistoryInsert = Database['public']['Tables']['doc_patient_medical_history']['Insert']
+export type PatientMedicalHistoryUpdate = Database['public']['Tables']['doc_patient_medical_history']['Update']
+
+export type PatientAllergy = Database['public']['Tables']['doc_patient_allergies']['Row']
+export type PatientAllergyInsert = Database['public']['Tables']['doc_patient_allergies']['Insert']
+export type PatientAllergyUpdate = Database['public']['Tables']['doc_patient_allergies']['Update']
+
+export type PatientMedication = Database['public']['Tables']['doc_patient_medications']['Row']
+export type PatientMedicationInsert = Database['public']['Tables']['doc_patient_medications']['Insert']
+export type PatientMedicationUpdate = Database['public']['Tables']['doc_patient_medications']['Update']

@@ -15,9 +15,9 @@ import { Calendar } from '@/components/ui/calendar'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
-import { format, addDays, startOfWeek } from 'date-fns'
-import { Plus, Trash2, Loader2, Clock, Save } from 'lucide-react'
-import type { Availability, AvailabilityOverride } from '@/types/database'
+import { format, addDays, startOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns'
+import { Plus, Trash2, Loader2, Clock, Save, Users, CalendarDays } from 'lucide-react'
+import type { Availability, AvailabilityOverride, Appointment } from '@/types/database'
 
 const DAYS_OF_WEEK = [
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
@@ -35,32 +35,41 @@ const SLOT_DURATIONS = [
   { value: '60', label: '60 minutes' },
 ]
 
-interface DaySchedule {
-  day_of_week: number
+interface TimeSlot {
+  id?: string              // For existing slots (from DB)
   start_time: string
   end_time: string
   slot_duration: number
-  is_active: boolean
   visit_type: string[]
+}
+
+interface DaySchedule {
+  day_of_week: number
+  is_active: boolean
+  time_slots: TimeSlot[]   // Array of multiple time windows
 }
 
 export default function CalendarPage() {
   const { doctor, isLoading: authLoading } = useAuth()
   const [availability, setAvailability] = useState<Availability[]>([])
   const [overrides, setOverrides] = useState<AvailabilityOverride[]>([])
+  const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
+  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date())
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
 
   const [schedules, setSchedules] = useState<DaySchedule[]>(
     DAYS_OF_WEEK.map((_, index) => ({
       day_of_week: index,
-      start_time: '09:00',
-      end_time: '17:00',
-      slot_duration: 30,
       is_active: index > 0 && index < 6, // Mon-Fri active by default
-      visit_type: ['online', 'physical'],
+      time_slots: [{
+        start_time: '09:00',
+        end_time: '17:00',
+        slot_duration: 30,
+        visit_type: ['online', 'physical'],
+      }],
     }))
   )
 
@@ -71,67 +80,194 @@ export default function CalendarPage() {
         return
       }
 
-      const supabase = createClient()
+      try {
+        const supabase = createClient()
 
-      const { data: availData } = await supabase
-        .from('doc_availability')
-        .select('*')
-        .eq('doctor_id', doctor.id)
+        // Get the first and last day of the calendar month for appointment fetching
+        const monthStart = startOfMonth(calendarMonth)
+        const monthEnd = endOfMonth(calendarMonth)
 
-      const { data: overrideData } = await supabase
-        .from('doc_availability_overrides')
-        .select('*')
-        .eq('doctor_id', doctor.id)
-        .gte('date', new Date().toISOString().split('T')[0])
+        const { data: availData, error: availError } = await supabase
+          .from('doc_availability')
+          .select('*')
+          .eq('doctor_id', doctor.id)
 
-      if (availData && availData.length > 0) {
-        setAvailability(availData)
-        // Map existing availability to schedules
-        const newSchedules = [...schedules]
-        availData.forEach(avail => {
-          newSchedules[avail.day_of_week] = {
-            day_of_week: avail.day_of_week,
-            start_time: avail.start_time,
-            end_time: avail.end_time,
-            slot_duration: avail.slot_duration,
-            is_active: avail.is_active,
-            visit_type: avail.visit_type,
-          }
-        })
-        setSchedules(newSchedules)
+        const { data: overrideData, error: overrideError } = await supabase
+          .from('doc_availability_overrides')
+          .select('*')
+          .eq('doctor_id', doctor.id)
+          .gte('date', new Date().toISOString().split('T')[0])
+
+        // Fetch appointments for the displayed month
+        const { data: appointmentsData, error: appointmentsError } = await supabase
+          .from('doc_appointments')
+          .select('*')
+          .eq('doctor_id', doctor.id)
+          .gte('appointment_date', format(monthStart, 'yyyy-MM-dd'))
+          .lte('appointment_date', format(monthEnd, 'yyyy-MM-dd'))
+
+        if (appointmentsError) {
+          console.error('Error fetching appointments:', appointmentsError)
+        }
+
+        if (appointmentsData) {
+          setAppointments(appointmentsData)
+        }
+
+        if (availError) {
+          console.error('Error fetching availability:', availError)
+        }
+        if (overrideError) {
+          console.error('Error fetching overrides:', overrideError)
+        }
+
+        if (availData && availData.length > 0) {
+          setAvailability(availData)
+          // Create fresh schedules with empty time_slots
+          const newSchedules: DaySchedule[] = DAYS_OF_WEEK.map((_, index) => ({
+            day_of_week: index,
+            is_active: false,
+            time_slots: [] as TimeSlot[],
+          }))
+
+          // Group availability records by day_of_week
+          availData.forEach((avail: Availability) => {
+            newSchedules[avail.day_of_week].is_active = true
+            newSchedules[avail.day_of_week].time_slots.push({
+              id: avail.id,
+              start_time: avail.start_time,
+              end_time: avail.end_time,
+              slot_duration: avail.slot_duration,
+              visit_type: avail.visit_type,
+            })
+          })
+
+          // Add default empty slot for days with no data
+          newSchedules.forEach(day => {
+            if (day.time_slots.length === 0) {
+              day.time_slots = [{
+                start_time: '09:00',
+                end_time: '17:00',
+                slot_duration: 30,
+                visit_type: ['online', 'physical'],
+              }]
+            }
+          })
+
+          setSchedules(newSchedules)
+        }
+
+        if (overrideData) {
+          setOverrides(overrideData)
+        }
+      } catch (error) {
+        console.error('Error in fetchAvailability:', error)
+      } finally {
+        setLoading(false)
       }
-
-      if (overrideData) {
-        setOverrides(overrideData)
-      }
-
-      setLoading(false)
     }
 
     if (!authLoading) {
       fetchAvailability()
     }
-  }, [doctor, authLoading])
+  }, [doctor, authLoading, calendarMonth])
 
-  const handleScheduleChange = (dayIndex: number, field: keyof DaySchedule, value: unknown) => {
+  const handleDayToggle = (dayIndex: number, checked: boolean) => {
     setSchedules(prev => {
       const newSchedules = [...prev]
       newSchedules[dayIndex] = {
         ...newSchedules[dayIndex],
-        [field]: value
+        is_active: checked,
       }
       return newSchedules
     })
   }
 
-  const handleVisitTypeChange = (dayIndex: number, type: string, checked: boolean) => {
+  const addTimeSlot = (dayIndex: number) => {
     setSchedules(prev => {
       const newSchedules = [...prev]
-      const currentTypes = newSchedules[dayIndex].visit_type
+      newSchedules[dayIndex] = {
+        ...newSchedules[dayIndex],
+        time_slots: [
+          ...newSchedules[dayIndex].time_slots,
+          {
+            start_time: '09:00',
+            end_time: '17:00',
+            slot_duration: 30,
+            visit_type: ['online', 'physical'],
+          },
+        ],
+      }
+      return newSchedules
+    })
+  }
+
+  const removeTimeSlot = (dayIndex: number, slotIndex: number) => {
+    setSchedules(prev => {
+      const newSchedules = [...prev]
+      const newSlots = newSchedules[dayIndex].time_slots.filter((_, i) => i !== slotIndex)
+      // Ensure at least one slot remains
+      if (newSlots.length === 0) {
+        newSlots.push({
+          start_time: '09:00',
+          end_time: '17:00',
+          slot_duration: 30,
+          visit_type: ['online', 'physical'],
+        })
+      }
+      newSchedules[dayIndex] = {
+        ...newSchedules[dayIndex],
+        time_slots: newSlots,
+      }
+      return newSchedules
+    })
+  }
+
+  const handleSlotChange = (
+    dayIndex: number,
+    slotIndex: number,
+    field: keyof TimeSlot,
+    value: unknown
+  ) => {
+    setSchedules(prev => {
+      const newSchedules = [...prev]
+      const newSlots = [...newSchedules[dayIndex].time_slots]
+      newSlots[slotIndex] = {
+        ...newSlots[slotIndex],
+        [field]: value,
+      }
+      newSchedules[dayIndex] = {
+        ...newSchedules[dayIndex],
+        time_slots: newSlots,
+      }
+      return newSchedules
+    })
+  }
+
+  const handleVisitTypeChange = (
+    dayIndex: number,
+    slotIndex: number,
+    type: string,
+    checked: boolean
+  ) => {
+    setSchedules(prev => {
+      const newSchedules = [...prev]
+      const newSlots = [...newSchedules[dayIndex].time_slots]
+      const currentTypes = newSlots[slotIndex].visit_type
       if (checked) {
-        newSchedules[dayIndex].visit_type = [...currentTypes, type]
+        newSlots[slotIndex] = {
+          ...newSlots[slotIndex],
+          visit_type: [...currentTypes, type],
+        }
       } else {
-        newSchedules[dayIndex].visit_type = currentTypes.filter(t => t !== type)
+        newSlots[slotIndex] = {
+          ...newSlots[slotIndex],
+          visit_type: currentTypes.filter(t => t !== type),
+        }
+      }
+      newSchedules[dayIndex] = {
+        ...newSchedules[dayIndex],
+        time_slots: newSlots,
       }
       return newSchedules
     })
@@ -149,18 +285,18 @@ export default function CalendarPage() {
       .delete()
       .eq('doctor_id', doctor.id)
 
-    // Insert new availability
+    // Flatten nested structure back to DB format
     const availabilityData = schedules
       .filter(s => s.is_active)
-      .map(s => ({
+      .flatMap(s => s.time_slots.map(slot => ({
         doctor_id: doctor.id,
         day_of_week: s.day_of_week,
-        start_time: s.start_time,
-        end_time: s.end_time,
-        slot_duration: s.slot_duration,
-        is_active: s.is_active,
-        visit_type: s.visit_type,
-      }))
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        slot_duration: slot.slot_duration,
+        is_active: true,
+        visit_type: slot.visit_type,
+      })))
 
     const { error } = await supabase
       .from('doc_availability')
@@ -219,6 +355,65 @@ export default function CalendarPage() {
     toast.success('Override removed')
   }
 
+  // Helper function to get appointments for a specific date
+  const getAppointmentsForDate = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    return appointments.filter(apt => apt.appointment_date === dateStr)
+  }
+
+  // Helper function to calculate total slots for a date
+  const getTotalSlotsForDate = (date: Date) => {
+    const dayOfWeek = date.getDay()
+    const dateStr = format(date, 'yyyy-MM-dd')
+
+    // Check for override first
+    const override = overrides.find(o => o.date === dateStr)
+    if (override && !override.is_available) {
+      return 0 // Holiday
+    }
+
+    const daySchedule = schedules[dayOfWeek]
+    if (!daySchedule.is_active && !override?.is_available) {
+      return 0 // Not a working day
+    }
+
+    // Calculate slots from time windows
+    let totalSlots = 0
+    for (const slot of daySchedule.time_slots) {
+      const [startHour, startMin] = slot.start_time.split(':').map(Number)
+      const [endHour, endMin] = slot.end_time.split(':').map(Number)
+      const startMinutes = startHour * 60 + startMin
+      const endMinutes = endHour * 60 + endMin
+      const duration = slot.slot_duration || 30
+      totalSlots += Math.floor((endMinutes - startMinutes) / duration)
+    }
+    return totalSlots
+  }
+
+  // Helper function to get available slots (total - booked)
+  const getAvailableSlotsForDate = (date: Date) => {
+    const total = getTotalSlotsForDate(date)
+    const booked = getAppointmentsForDate(date).filter(
+      apt => apt.status !== 'cancelled'
+    ).length
+    return Math.max(0, total - booked)
+  }
+
+  // Get date info for the calendar display
+  const getDateInfo = (date: Date) => {
+    const dayAppointments = getAppointmentsForDate(date)
+    const confirmedAppointments = dayAppointments.filter(apt => apt.status !== 'cancelled')
+    const totalSlots = getTotalSlotsForDate(date)
+    const availableSlots = getAvailableSlotsForDate(date)
+
+    return {
+      appointments: confirmedAppointments.length,
+      totalSlots,
+      availableSlots,
+      patients: new Set(dayAppointments.map(apt => apt.patient_email)).size,
+    }
+  }
+
   if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -256,103 +451,128 @@ export default function CalendarPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {schedules.map((schedule, index) => (
+              {schedules.map((schedule, dayIndex) => (
                 <div
-                  key={index}
-                  className="flex items-center gap-4 p-4 rounded-lg border bg-gray-50"
+                  key={dayIndex}
+                  className="p-4 rounded-lg border bg-gray-50 space-y-3"
                 >
-                  <div className="w-28">
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={schedule.is_active}
-                        onCheckedChange={(checked) =>
-                          handleScheduleChange(index, 'is_active', checked)
-                        }
-                      />
-                      <Label className="font-medium">{DAYS_OF_WEEK[index]}</Label>
-                    </div>
+                  {/* Day header with toggle */}
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={schedule.is_active}
+                      onCheckedChange={(checked) => handleDayToggle(dayIndex, checked)}
+                    />
+                    <Label className="font-medium w-28">{DAYS_OF_WEEK[dayIndex]}</Label>
+                    {schedule.is_active && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => addTimeSlot(dayIndex)}
+                        className="text-green-600 hover:text-green-700"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Slot
+                      </Button>
+                    )}
                   </div>
 
+                  {/* Time slots */}
                   {schedule.is_active ? (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-gray-400" />
-                        <Select
-                          value={schedule.start_time}
-                          onValueChange={(value) =>
-                            handleScheduleChange(index, 'start_time', value)
-                          }
+                    <div className="space-y-2 ml-6">
+                      {schedule.time_slots.map((slot, slotIndex) => (
+                        <div
+                          key={slotIndex}
+                          className="flex items-center gap-2 flex-wrap p-2 bg-white rounded border"
                         >
-                          <SelectTrigger className="w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TIME_SLOTS.map(time => (
-                              <SelectItem key={time} value={time}>{time}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <span className="text-gray-400">to</span>
-                        <Select
-                          value={schedule.end_time}
-                          onValueChange={(value) =>
-                            handleScheduleChange(index, 'end_time', value)
-                          }
-                        >
-                          <SelectTrigger className="w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TIME_SLOTS.map(time => (
-                              <SelectItem key={time} value={time}>{time}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Select
-                          value={schedule.slot_duration.toString()}
-                          onValueChange={(value) =>
-                            handleScheduleChange(index, 'slot_duration', parseInt(value))
-                          }
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SLOT_DURATIONS.map(({ value, label }) => (
-                              <SelectItem key={value} value={value}>{label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id={`online-${index}`}
-                            checked={schedule.visit_type.includes('online')}
-                            onCheckedChange={(checked) =>
-                              handleVisitTypeChange(index, 'online', checked as boolean)
+                          {/* Time selectors */}
+                          <Clock className="h-4 w-4 text-gray-400" />
+                          <Select
+                            value={slot.start_time}
+                            onValueChange={(value) =>
+                              handleSlotChange(dayIndex, slotIndex, 'start_time', value)
                             }
-                          />
-                          <Label htmlFor={`online-${index}`} className="text-sm">Online</Label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id={`physical-${index}`}
-                            checked={schedule.visit_type.includes('physical')}
-                            onCheckedChange={(checked) =>
-                              handleVisitTypeChange(index, 'physical', checked as boolean)
+                          >
+                            <SelectTrigger className="w-24">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TIME_SLOTS.map(time => (
+                                <SelectItem key={time} value={time}>{time}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <span className="text-gray-400">to</span>
+                          <Select
+                            value={slot.end_time}
+                            onValueChange={(value) =>
+                              handleSlotChange(dayIndex, slotIndex, 'end_time', value)
                             }
-                          />
-                          <Label htmlFor={`physical-${index}`} className="text-sm">Physical</Label>
+                          >
+                            <SelectTrigger className="w-24">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TIME_SLOTS.map(time => (
+                                <SelectItem key={time} value={time}>{time}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+
+                          {/* Slot duration */}
+                          <Select
+                            value={slot.slot_duration.toString()}
+                            onValueChange={(value) =>
+                              handleSlotChange(dayIndex, slotIndex, 'slot_duration', parseInt(value))
+                            }
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {SLOT_DURATIONS.map(({ value, label }) => (
+                                <SelectItem key={value} value={value}>{label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+
+                          {/* Visit type checkboxes */}
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`online-${dayIndex}-${slotIndex}`}
+                              checked={slot.visit_type.includes('online')}
+                              onCheckedChange={(checked) =>
+                                handleVisitTypeChange(dayIndex, slotIndex, 'online', checked as boolean)
+                              }
+                            />
+                            <Label htmlFor={`online-${dayIndex}-${slotIndex}`} className="text-sm">Online</Label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`physical-${dayIndex}-${slotIndex}`}
+                              checked={slot.visit_type.includes('physical')}
+                              onCheckedChange={(checked) =>
+                                handleVisitTypeChange(dayIndex, slotIndex, 'physical', checked as boolean)
+                              }
+                            />
+                            <Label htmlFor={`physical-${dayIndex}-${slotIndex}`} className="text-sm">Physical</Label>
+                          </div>
+
+                          {/* Remove button (show if more than 1 slot) */}
+                          {schedule.time_slots.length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeTimeSlot(dayIndex, slotIndex)}
+                              className="ml-auto"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          )}
                         </div>
-                      </div>
-                    </>
+                      ))}
+                    </div>
                   ) : (
-                    <span className="text-gray-400 text-sm">Not available</span>
+                    <span className="text-gray-400 text-sm ml-6">Not available</span>
                   )}
                 </div>
               ))}
@@ -442,13 +662,18 @@ export default function CalendarPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Calendar Preview</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5" />
+                Calendar Preview
+              </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <Calendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={setSelectedDate}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
                 className="rounded-md border mx-auto"
                 modifiers={{
                   holiday: overrides
@@ -457,12 +682,131 @@ export default function CalendarPage() {
                   working: overrides
                     .filter(o => o.is_available)
                     .map(o => new Date(o.date)),
+                  hasAppointments: appointments
+                    .filter(apt => apt.status !== 'cancelled')
+                    .map(apt => new Date(apt.appointment_date)),
                 }}
                 modifiersClassNames={{
                   holiday: 'bg-red-100 text-red-600',
                   working: 'bg-green-100 text-green-600',
+                  hasAppointments: 'font-bold',
+                }}
+                components={{
+                  DayContent: ({ date }) => {
+                    const info = getDateInfo(date)
+                    const hasData = info.appointments > 0 || info.totalSlots > 0
+                    return (
+                      <div className="relative w-full h-full flex flex-col items-center justify-center">
+                        <span>{date.getDate()}</span>
+                        {hasData && info.appointments > 0 && (
+                          <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 flex gap-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" title={`${info.appointments} appointments`}></span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  },
                 }}
               />
+
+              {/* Legend */}
+              <div className="flex flex-wrap gap-4 justify-center text-xs border-t pt-4">
+                <div className="flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                  <span>Has Appointments</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-3 h-3 rounded bg-red-100 border border-red-300"></span>
+                  <span>Holiday</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-3 h-3 rounded bg-green-100 border border-green-300"></span>
+                  <span>Special Working</span>
+                </div>
+              </div>
+
+              {/* Selected Date Details */}
+              {selectedDate && (
+                <div className="border-t pt-4 space-y-3">
+                  <h4 className="font-medium text-sm">
+                    {format(selectedDate, 'EEEE, MMMM d, yyyy')}
+                  </h4>
+                  {(() => {
+                    const info = getDateInfo(selectedDate)
+                    const dateOverride = overrides.find(o => o.date === format(selectedDate, 'yyyy-MM-dd'))
+
+                    if (dateOverride && !dateOverride.is_available) {
+                      return (
+                        <Badge variant="destructive">Holiday - Not Available</Badge>
+                      )
+                    }
+
+                    if (info.totalSlots === 0) {
+                      return (
+                        <p className="text-sm text-gray-500">Not a working day</p>
+                      )
+                    }
+
+                    return (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-blue-50 p-3 rounded-lg text-center">
+                          <div className="flex items-center justify-center gap-1 text-blue-600">
+                            <Users className="h-4 w-4" />
+                            <span className="text-lg font-bold">{info.appointments}</span>
+                          </div>
+                          <p className="text-xs text-blue-600">Appointments</p>
+                        </div>
+                        <div className="bg-green-50 p-3 rounded-lg text-center">
+                          <div className="flex items-center justify-center gap-1 text-green-600">
+                            <Clock className="h-4 w-4" />
+                            <span className="text-lg font-bold">{info.availableSlots}</span>
+                          </div>
+                          <p className="text-xs text-green-600">Available Slots</p>
+                        </div>
+                        <div className="col-span-2 bg-gray-50 p-2 rounded-lg text-center">
+                          <p className="text-xs text-gray-600">
+                            <span className="font-medium">{info.totalSlots}</span> total slots &bull;{' '}
+                            <span className="font-medium">{info.patients}</span> unique patients
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {/* Show appointments for selected date */}
+                  {(() => {
+                    const dayAppointments = getAppointmentsForDate(selectedDate)
+                    if (dayAppointments.length === 0) return null
+
+                    return (
+                      <div className="space-y-2">
+                        <h5 className="text-xs font-medium text-gray-500 uppercase">Appointments</h5>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {dayAppointments.map((apt) => (
+                            <div
+                              key={apt.id}
+                              className="flex items-center justify-between text-xs p-2 bg-gray-50 rounded"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{apt.start_time}</span>
+                                <span className="text-gray-600 truncate max-w-[100px]">
+                                  {apt.patient_name}
+                                </span>
+                              </div>
+                              <Badge
+                                variant={apt.status === 'cancelled' ? 'destructive' : 'outline'}
+                                className="text-xs"
+                              >
+                                {apt.status}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

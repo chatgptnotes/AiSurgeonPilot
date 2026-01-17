@@ -16,8 +16,9 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { Search, Filter, Video, MapPin, Check, X, Clock, Loader2, Link as LinkIcon, Mail, MessageCircle } from 'lucide-react'
-import type { Appointment } from '@/types/database'
+import { Search, Filter, Video, MapPin, Check, X, Clock, Loader2, Link as LinkIcon, Mail, MessageCircle, UserCheck, AlertTriangle } from 'lucide-react'
+import Link from 'next/link'
+import type { Appointment, PatientAllergy } from '@/types/database'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -35,6 +36,7 @@ const paymentColors: Record<string, string> = {
 export default function AppointmentsPage() {
   const { doctor, isLoading: authLoading } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [patientAllergies, setPatientAllergies] = useState<Record<string, PatientAllergy[]>>({})
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -62,6 +64,31 @@ export default function AppointmentsPage() {
       }
 
       setAppointments(data || [])
+
+      // Fetch allergies for registered patients
+      const patientIds = (data || [])
+        .filter((apt: Appointment) => apt.patient_id)
+        .map((apt: Appointment) => apt.patient_id as string)
+
+      if (patientIds.length > 0) {
+        const uniquePatientIds = [...new Set(patientIds)]
+        const { data: allergiesData } = await supabase
+          .from('doc_patient_allergies')
+          .select('*')
+          .in('patient_id', uniquePatientIds)
+
+        if (allergiesData) {
+          const allergiesMap: Record<string, PatientAllergy[]> = {}
+          allergiesData.forEach((allergy: PatientAllergy) => {
+            if (!allergiesMap[allergy.patient_id]) {
+              allergiesMap[allergy.patient_id] = []
+            }
+            allergiesMap[allergy.patient_id].push(allergy)
+          })
+          setPatientAllergies(allergiesMap)
+        }
+      }
+
       setLoading(false)
     }
 
@@ -215,11 +242,33 @@ export default function AppointmentsPage() {
     )
   }
 
-  const AppointmentRow = ({ appointment }: { appointment: Appointment }) => (
+  const AppointmentRow = ({ appointment }: { appointment: Appointment }) => {
+    const hasAllergies = appointment.patient_id && patientAllergies[appointment.patient_id]?.length > 0
+
+    return (
     <TableRow key={appointment.id}>
       <TableCell>
         <div>
-          <p className="font-medium">{appointment.patient_name}</p>
+          <div className="flex items-center gap-2">
+            {appointment.patient_id ? (
+              <Link href={`/patients/${appointment.patient_id}`} className="font-medium text-green-600 hover:text-green-700 hover:underline">
+                {appointment.patient_name}
+              </Link>
+            ) : (
+              <p className="font-medium">{appointment.patient_name}</p>
+            )}
+            {appointment.patient_id && (
+              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 gap-1">
+                <UserCheck className="h-3 w-3" />
+                Registered
+              </Badge>
+            )}
+            {hasAllergies && (
+              <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200 gap-1" title="Patient has allergies">
+                <AlertTriangle className="h-3 w-3" />
+              </Badge>
+            )}
+          </div>
           <p className="text-sm text-gray-500">{appointment.patient_email}</p>
         </div>
       </TableCell>
@@ -303,7 +352,7 @@ export default function AppointmentsPage() {
         </div>
       </TableCell>
     </TableRow>
-  )
+  )}
 
   return (
     <div>

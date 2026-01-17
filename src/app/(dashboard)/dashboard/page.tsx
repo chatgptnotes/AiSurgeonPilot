@@ -108,7 +108,7 @@ export default function DashboardPage() {
           .eq('payment_status', 'paid')
           .gte('appointment_date', monthStart.toISOString().split('T')[0])
 
-        const monthRevenue = revenueData?.reduce((sum, row) => sum + (row.amount || 0), 0) || 0
+        const monthRevenue = revenueData?.reduce((sum: number, row: { amount: number | null }) => sum + (row.amount || 0), 0) || 0
 
         setStats({
           totalPatients: patientsCount || 0,
@@ -149,12 +149,14 @@ export default function DashboardPage() {
             subtitle="Click to view all"
             icon={Users}
             iconColor="text-blue-500"
+            href="/patients"
           />
           <StatsCard
             title="Today's Consultations"
             value={loadingStats ? '-' : stats.todayConsultations}
             icon={Stethoscope}
             iconColor="text-green-500"
+            href="/appointments"
           />
           <StatsCard
             title="This Week's Appointments"
@@ -162,6 +164,7 @@ export default function DashboardPage() {
             subtitle="Click to view details"
             icon={Calendar}
             iconColor="text-purple-500"
+            href="/appointments"
           />
           <StatsCard
             title="Revenue This Month"

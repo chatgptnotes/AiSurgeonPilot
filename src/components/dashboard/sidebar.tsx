@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/use-auth'
 import {
   LayoutDashboard,
   Calendar,
+  CalendarCheck,
   Users,
   FileText,
   Video,
@@ -42,6 +43,16 @@ const navItems: NavItem[] = [
     title: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
+  },
+  {
+    title: 'Patients',
+    href: '/patients',
+    icon: Users,
+  },
+  {
+    title: 'Appointments',
+    href: '/appointments',
+    icon: CalendarCheck,
   },
   {
     title: 'Calendar',
