@@ -31,6 +31,9 @@ import {
   Clock,
   Video,
   MapPin,
+  FolderOpen,
+  Download,
+  Eye,
 } from 'lucide-react'
 import type {
   Patient,
@@ -73,6 +76,7 @@ export default function PatientDetailPage() {
   const [allergies, setAllergies] = useState<PatientAllergy[]>([])
   const [medications, setMedications] = useState<PatientMedication[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [documents, setDocuments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -97,7 +101,7 @@ export default function PatientDetailPage() {
       setPatient(patientData)
 
       // Fetch all related data in parallel
-      const [selectionRes, historyRes, allergiesRes, medsRes, appointmentsRes] = await Promise.all([
+      const [selectionRes, historyRes, allergiesRes, medsRes, appointmentsRes, documentsRes] = await Promise.all([
         supabase
           .from('doc_patient_doctor_selections')
           .select('*')
@@ -128,6 +132,12 @@ export default function PatientDetailPage() {
           .eq('doctor_id', doctor.id)
           .order('appointment_date', { ascending: false })
           .order('start_time', { ascending: false }),
+        supabase
+          .from('doc_patient_reports')
+          .select('*')
+          .eq('doc_patient_id', patientId)
+          .eq('doctor_id', doctor.id)
+          .order('created_at', { ascending: false }),
       ])
 
       if (selectionRes.data) setSelection(selectionRes.data)
@@ -135,6 +145,7 @@ export default function PatientDetailPage() {
       if (allergiesRes.data) setAllergies(allergiesRes.data)
       if (medsRes.data) setMedications(medsRes.data)
       if (appointmentsRes.data) setAppointments(appointmentsRes.data)
+      if (documentsRes.data) setDocuments(documentsRes.data)
 
       setLoading(false)
     }
@@ -282,6 +293,7 @@ export default function PatientDetailPage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="history">Medical History</TabsTrigger>
             <TabsTrigger value="appointments">Appointments ({appointments.length})</TabsTrigger>
+            <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -552,6 +564,72 @@ export default function PatientDetailPage() {
                       ))}
                     </TableBody>
                   </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Documents Tab */}
+          <TabsContent value="documents">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FolderOpen className="h-5 w-5 text-purple-500" />
+                  Patient Uploaded Documents
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {documents.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FolderOpen className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p className="text-gray-500">No documents uploaded by this patient</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {documents.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="p-2 bg-purple-100 rounded-lg">
+                            <FileText className="h-6 w-6 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{doc.file_name}</p>
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                              <Badge variant="outline" className="text-xs">
+                                {doc.file_type}
+                              </Badge>
+                              <span>Uploaded {format(new Date(doc.created_at), 'MMM d, yyyy')}</span>
+                            </div>
+                            {doc.description && (
+                              <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={async () => {
+                            const supabase = createClient()
+                            const { data } = await supabase.storage
+                              .from('patient-documents')
+                              .createSignedUrl(doc.file_url, 3600)
+                            if (data?.signedUrl) {
+                              window.open(data.signedUrl, '_blank')
+                            } else {
+                              toast.error('Could not open document')
+                            }
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                          View
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>

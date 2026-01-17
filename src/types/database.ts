@@ -442,6 +442,8 @@ export interface Database {
           profile_image_url: string | null
           is_profile_complete: boolean
           is_active: boolean
+          registration_step: number | null
+          registration_completed: boolean | null
           created_at: string
           updated_at: string
         }
@@ -461,6 +463,8 @@ export interface Database {
           profile_image_url?: string | null
           is_profile_complete?: boolean
           is_active?: boolean
+          registration_step?: number | null
+          registration_completed?: boolean | null
           created_at?: string
           updated_at?: string
         }
@@ -480,6 +484,8 @@ export interface Database {
           profile_image_url?: string | null
           is_profile_complete?: boolean
           is_active?: boolean
+          registration_step?: number | null
+          registration_completed?: boolean | null
           created_at?: string
           updated_at?: string
         }
