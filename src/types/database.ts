@@ -28,6 +28,11 @@ export interface Database {
           booking_slug: string | null
           stripe_account_id: string | null
           standard_meeting_link: string | null
+          zoom_access_token: string | null
+          zoom_refresh_token: string | null
+          zoom_token_expires_at: string | null
+          zoom_user_id: string | null
+          zoom_connected_at: string | null
           is_verified: boolean
           created_at: string
           updated_at: string
@@ -50,6 +55,11 @@ export interface Database {
           booking_slug?: string | null
           stripe_account_id?: string | null
           standard_meeting_link?: string | null
+          zoom_access_token?: string | null
+          zoom_refresh_token?: string | null
+          zoom_token_expires_at?: string | null
+          zoom_user_id?: string | null
+          zoom_connected_at?: string | null
           is_verified?: boolean
           created_at?: string
           updated_at?: string
@@ -72,6 +82,11 @@ export interface Database {
           booking_slug?: string | null
           stripe_account_id?: string | null
           standard_meeting_link?: string | null
+          zoom_access_token?: string | null
+          zoom_refresh_token?: string | null
+          zoom_token_expires_at?: string | null
+          zoom_user_id?: string | null
+          zoom_connected_at?: string | null
           is_verified?: boolean
           created_at?: string
           updated_at?: string

@@ -7,15 +7,25 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { Video, FileText, Sparkles, Loader2, Eye, Mic } from 'lucide-react'
+import { Video, FileText, Sparkles, Loader2, Eye, Mic, Link2, Download, CheckCircle } from 'lucide-react'
 import type { Meeting, Appointment } from '@/types/database'
+
+interface ZoomRecording {
+  id: string
+  uuid: string
+  topic: string
+  startTime: string
+  duration: number
+  hasTranscript: boolean
+  recordingCount: number
+}
 
 export default function MeetingsPage() {
   const { doctor, isLoading: authLoading } = useAuth()
@@ -26,6 +36,12 @@ export default function MeetingsPage() {
   const [generating, setGenerating] = useState(false)
   const [showTranscriptDialog, setShowTranscriptDialog] = useState(false)
   const [showSummaryDialog, setShowSummaryDialog] = useState(false)
+  const [showZoomDialog, setShowZoomDialog] = useState(false)
+  const [zoomConnected, setZoomConnected] = useState(false)
+  const [zoomRecordings, setZoomRecordings] = useState<ZoomRecording[]>([])
+  const [loadingRecordings, setLoadingRecordings] = useState(false)
+  const [fetchingTranscript, setFetchingTranscript] = useState(false)
+  const [selectedZoomRecording, setSelectedZoomRecording] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchMeetings = async () => {
@@ -49,12 +65,90 @@ export default function MeetingsPage() {
 
       setMeetings(data || [])
       setLoading(false)
+
+      // Check if Zoom is connected
+      setZoomConnected(!!doctor.zoom_connected_at)
     }
 
     if (doctor) {
       fetchMeetings()
     }
   }, [doctor])
+
+  // Check for zoom_connected query param
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('zoom_connected') === 'true') {
+      toast.success('Zoom account connected successfully!')
+      setZoomConnected(true)
+      // Clean up URL
+      window.history.replaceState({}, '', '/meetings')
+    }
+  }, [])
+
+  const connectZoom = () => {
+    window.location.href = '/api/zoom/authorize'
+  }
+
+  const fetchZoomRecordings = async () => {
+    setLoadingRecordings(true)
+    try {
+      const response = await fetch('/api/zoom/recordings')
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to fetch recordings')
+      }
+      const data = await response.json()
+      setZoomRecordings(data.recordings)
+      setShowZoomDialog(true)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch Zoom recordings')
+    } finally {
+      setLoadingRecordings(false)
+    }
+  }
+
+  const fetchTranscriptFromZoom = async (zoomMeetingId: string) => {
+    if (!selectedMeeting) return
+
+    setFetchingTranscript(true)
+    setSelectedZoomRecording(zoomMeetingId)
+
+    try {
+      const response = await fetch('/api/zoom/transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          meetingId: selectedMeeting.id,
+          zoomMeetingId,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to fetch transcript')
+      }
+
+      const data = await response.json()
+
+      // Update local state
+      setMeetings(prev =>
+        prev.map(m =>
+          m.id === selectedMeeting.id
+            ? { ...m, transcript: data.transcript }
+            : m
+        )
+      )
+      setTranscript(data.transcript)
+      setShowZoomDialog(false)
+      toast.success('Transcript fetched successfully!')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch transcript')
+    } finally {
+      setFetchingTranscript(false)
+      setSelectedZoomRecording(null)
+    }
+  }
 
   const generateSummary = async () => {
     if (!selectedMeeting || !transcript) return
@@ -136,12 +230,23 @@ export default function MeetingsPage() {
         <Card className="bg-blue-50 border-blue-200">
           <CardContent className="p-4 flex items-start gap-4">
             <Sparkles className="h-6 w-6 text-blue-600 mt-0.5" />
-            <div>
+            <div className="flex-1">
               <p className="font-medium text-blue-800">AI-Powered Meeting Summaries</p>
               <p className="text-sm text-blue-600">
-                Upload or paste your meeting transcript and let AI generate summaries, diagnosis notes, and prescriptions automatically using Google Gemini.
+                Connect your Zoom account to automatically fetch meeting transcripts, or paste them manually. AI will generate summaries, diagnosis notes, and prescriptions using Google Gemini.
               </p>
             </div>
+            {!zoomConnected ? (
+              <Button onClick={connectZoom} className="bg-blue-600 hover:bg-blue-700">
+                <Link2 className="h-4 w-4 mr-2" />
+                Connect Zoom
+              </Button>
+            ) : (
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Zoom Connected
+              </Badge>
+            )}
           </CardContent>
         </Card>
 
@@ -204,6 +309,25 @@ export default function MeetingsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
+                          {zoomConnected && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedMeeting(meeting)
+                                setTranscript(meeting.transcript || '')
+                                fetchZoomRecordings()
+                              }}
+                              disabled={loadingRecordings}
+                            >
+                              {loadingRecordings ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4 mr-1" />
+                              )}
+                              Fetch from Zoom
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -239,26 +363,130 @@ export default function MeetingsPage() {
           </CardContent>
         </Card>
 
+        {/* Zoom Recordings Dialog */}
+        <Dialog open={showZoomDialog} onOpenChange={setShowZoomDialog}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Select Zoom Recording</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {zoomRecordings.length === 0 ? (
+                <div className="text-center py-8">
+                  <Video className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p className="text-gray-500">No recordings found in the last 30 days</p>
+                  <p className="text-sm text-gray-400">
+                    Make sure Cloud Recording is enabled in your Zoom settings
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Meeting Topic</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead>Transcript</TableHead>
+                      <TableHead>Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {zoomRecordings.map(recording => (
+                      <TableRow key={recording.id}>
+                        <TableCell className="font-medium">{recording.topic}</TableCell>
+                        <TableCell>
+                          {format(new Date(recording.startTime), 'MMM d, yyyy h:mm a')}
+                        </TableCell>
+                        <TableCell>{recording.duration} min</TableCell>
+                        <TableCell>
+                          <Badge variant={recording.hasTranscript ? 'default' : 'outline'}>
+                            {recording.hasTranscript ? 'Available' : 'Not Available'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            disabled={!recording.hasTranscript || fetchingTranscript}
+                            onClick={() => fetchTranscriptFromZoom(recording.uuid)}
+                          >
+                            {fetchingTranscript && selectedZoomRecording === recording.uuid ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                Fetching...
+                              </>
+                            ) : (
+                              <>
+                                <Download className="h-4 w-4 mr-1" />
+                                Fetch
+                              </>
+                            )}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Transcript Dialog */}
         <Dialog open={showTranscriptDialog} onOpenChange={setShowTranscriptDialog}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Meeting Transcript</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Paste or type the meeting transcript</Label>
-                <Textarea
-                  value={transcript}
-                  onChange={(e) => setTranscript(e.target.value)}
-                  placeholder="Paste the meeting transcript here..."
-                  rows={12}
-                />
-              </div>
-              <p className="text-sm text-gray-500">
-                The AI will analyze this transcript to generate a summary, diagnosis notes, and prescription recommendations.
-              </p>
-            </div>
+            <Tabs defaultValue="manual" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="manual">
+                  <FileText className="h-4 w-4 mr-1" />
+                  Manual Entry
+                </TabsTrigger>
+                {zoomConnected && (
+                  <TabsTrigger value="zoom">
+                    <Video className="h-4 w-4 mr-1" />
+                    Fetch from Zoom
+                  </TabsTrigger>
+                )}
+              </TabsList>
+              <TabsContent value="manual" className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Paste or type the meeting transcript</Label>
+                  <Textarea
+                    value={transcript}
+                    onChange={(e) => setTranscript(e.target.value)}
+                    placeholder="Paste the meeting transcript here..."
+                    rows={12}
+                  />
+                </div>
+                <p className="text-sm text-gray-500">
+                  The AI will analyze this transcript to generate a summary, diagnosis notes, and prescription recommendations.
+                </p>
+              </TabsContent>
+              {zoomConnected && (
+                <TabsContent value="zoom" className="space-y-4">
+                  <div className="text-center py-4">
+                    <Video className="h-12 w-12 mx-auto mb-4 text-blue-500" />
+                    <p className="text-gray-600 mb-4">
+                      Fetch transcript directly from your Zoom recordings
+                    </p>
+                    <Button onClick={fetchZoomRecordings} disabled={loadingRecordings}>
+                      {loadingRecordings ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-4 w-4 mr-2" />
+                          Browse Zoom Recordings
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </TabsContent>
+              )}
+            </Tabs>
             <DialogFooter>
               <Button variant="outline" onClick={saveTranscript} disabled={!transcript}>
                 Save Only
