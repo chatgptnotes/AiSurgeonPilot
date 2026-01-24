@@ -78,11 +78,15 @@ export default function DashboardPage() {
       monthStart.setDate(1)
 
       try {
-        // Get unique patients
-        const { count: patientsCount } = await supabase
+        // Get unique patients (count distinct patient_email)
+        const { data: patientData } = await supabase
           .from('doc_appointments')
-          .select('patient_email', { count: 'exact', head: true })
+          .select('patient_email')
           .eq('doctor_id', doctor.id)
+
+        // Count unique patient emails
+        const uniquePatients = new Set(patientData?.map((p: { patient_email: string }) => p.patient_email) || [])
+        const patientsCount = uniquePatients.size
 
         // Get today's consultations
         const { count: todayCount } = await supabase

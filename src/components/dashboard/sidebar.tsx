@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAuth } from '@/hooks/use-auth'
+import { SidebarCalendarStats } from './sidebar-calendar-stats'
 import {
   LayoutDashboard,
   Calendar,
@@ -202,6 +203,11 @@ export function Sidebar() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Calendar Stats */}
+      <div className="border-b py-2">
+        <SidebarCalendarStats />
       </div>
 
       {/* Navigation */}

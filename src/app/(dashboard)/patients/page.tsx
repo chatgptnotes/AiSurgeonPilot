@@ -157,7 +157,7 @@ export default function PatientsPage() {
             const nameParts = (appointmentInfo.patient_name || 'Unknown Patient').split(' ')
             allPatients.push({
               id: `unregistered-${lowerEmail}`,
-              user_id: null,
+              user_id: '',
               email: appointmentInfo.patient_email,
               first_name: nameParts[0] || 'Unknown',
               last_name: nameParts.slice(1).join(' ') || '',
@@ -171,6 +171,8 @@ export default function PatientsPage() {
               profile_image_url: null,
               is_profile_complete: false,
               is_active: true,
+              registration_step: null,
+              registration_completed: null,
               created_at: appointmentInfo.created_at,
               updated_at: appointmentInfo.created_at,
             })

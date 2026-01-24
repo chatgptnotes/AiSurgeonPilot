@@ -142,8 +142,8 @@ export default function PatientDetailPage() {
         supabase
           .from('doc_appointments')
           .select('*')
-          .eq('patient_id', patientId)
           .eq('doctor_id', doctor.id)
+          .or(`patient_id.eq.${patientId},patient_email.eq.${patientData.email}`)
           .order('appointment_date', { ascending: false })
           .order('start_time', { ascending: false }),
         supabase

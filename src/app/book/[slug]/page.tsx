@@ -179,7 +179,104 @@ export default function BookingPage() {
 
     try {
       const supabase = createClient()
+      const dateStr = format(selectedDate, 'yyyy-MM-dd')
+      const dayOfWeek = selectedDate.getDay()
 
+      // SERVER-SIDE VALIDATION: Re-fetch and validate availability before booking
+
+      // 1. Check for holiday/override on this date (using array query instead of .single())
+      const { data: overrideData, error: overrideError } = await supabase
+        .from('doc_availability_overrides')
+        .select('*')
+        .eq('doctor_id', doctor.id)
+        .eq('date', dateStr)
+
+      if (overrideError) {
+        console.error('Error checking override:', overrideError)
+        alert('Unable to verify availability. Please try again.')
+        setSubmitting(false)
+        return
+      }
+
+      const override = overrideData?.[0]
+
+      // If there's an override marking this day as unavailable (holiday), block booking
+      if (override && !override.is_available) {
+        alert('Sorry, this date is marked as a holiday. The doctor is not available.')
+        setSelectedDate(undefined)
+        setSelectedSlot(null)
+        setStep('select')
+        setSubmitting(false)
+        return
+      }
+
+      // 2. Check regular availability for this day of week
+      const { data: availData, error: availError } = await supabase
+        .from('doc_availability')
+        .select('*')
+        .eq('doctor_id', doctor.id)
+        .eq('day_of_week', dayOfWeek)
+        .eq('is_active', true)
+
+      if (availError) {
+        console.error('Error checking availability:', availError)
+        alert('Unable to verify availability. Please try again.')
+        setSubmitting(false)
+        return
+      }
+
+      // If there's no override making this day available, check regular schedule
+      const hasOverrideWorkingDay = override?.is_available === true
+
+      if (!hasOverrideWorkingDay) {
+        // Check if the selected slot falls within any availability window for this day
+        const hasValidSlot = availData && availData.length > 0 && availData.some((a: Availability) =>
+          a.visit_type.includes(visitType) &&
+          a.start_time <= selectedSlot.start + ':00' &&
+          a.end_time >= selectedSlot.end + ':00'
+        )
+
+        if (!hasValidSlot) {
+          alert('Sorry, this time slot is no longer available. The doctor may have changed their schedule.')
+          setSelectedSlot(null)
+          setStep('select')
+          setSubmitting(false)
+          return
+        }
+      }
+
+      // 3. Check if slot is already booked (race condition protection)
+      const { data: existingBookings, error: bookingError } = await supabase
+        .from('doc_appointments')
+        .select('id')
+        .eq('doctor_id', doctor.id)
+        .eq('appointment_date', dateStr)
+        .eq('start_time', selectedSlot.start + ':00')
+        .in('status', ['pending', 'confirmed'])
+
+      if (bookingError) {
+        console.error('Error checking existing bookings:', bookingError)
+        alert('Unable to verify slot availability. Please try again.')
+        setSubmitting(false)
+        return
+      }
+
+      if (existingBookings && existingBookings.length > 0) {
+        alert('Sorry, this slot was just booked by someone else. Please select a different time.')
+        setSelectedSlot(null)
+        // Refresh appointments list
+        const { data: refreshedAppointments } = await supabase
+          .from('doc_appointments')
+          .select('*')
+          .eq('doctor_id', doctor.id)
+          .in('status', ['pending', 'confirmed'])
+          .gte('appointment_date', new Date().toISOString().split('T')[0])
+        setAppointments(refreshedAppointments || [])
+        setSubmitting(false)
+        return
+      }
+
+      // All validations passed - proceed with booking
       const fee = visitType === 'online' ? doctor.online_fee : doctor.consultation_fee
 
       const { data, error } = await supabase
@@ -189,7 +286,7 @@ export default function BookingPage() {
           patient_name: patientDetails.name,
           patient_email: patientDetails.email,
           patient_phone: patientDetails.phone || null,
-          appointment_date: format(selectedDate, 'yyyy-MM-dd'),
+          appointment_date: dateStr,
           start_time: selectedSlot.start + ':00',
           end_time: selectedSlot.end + ':00',
           visit_type: visitType,
@@ -201,6 +298,29 @@ export default function BookingPage() {
         .single()
 
       if (error) throw error
+
+      // Send WhatsApp confirmation if phone number is provided
+      if (patientDetails.phone) {
+        try {
+          await fetch('/api/notifications/booking-confirmation', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              patientName: patientDetails.name,
+              patientPhone: patientDetails.phone,
+              doctorName: doctor.full_name,
+              appointmentDate: format(selectedDate, 'EEEE, MMMM d, yyyy'),
+              appointmentTime: `${selectedSlot.start} - ${selectedSlot.end}`,
+              visitType: visitType === 'online' ? 'Online Consultation' : 'Physical Visit',
+            }),
+          })
+        } catch (whatsappError) {
+          // Don't fail the booking if WhatsApp fails, just log it
+          console.error('WhatsApp confirmation failed:', whatsappError)
+        }
+      }
 
       setStep('success')
     } catch (error) {
@@ -249,17 +369,40 @@ export default function BookingPage() {
         <Card className="max-w-md w-full">
           <CardContent className="p-8 text-center">
             <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-semibold mb-2">Booking Requested!</h2>
-            <p className="text-gray-500 mb-6">
-              Your appointment request has been sent to {doctor.full_name}. You will receive a confirmation once the doctor approves.
+            <h2 className="text-2xl font-semibold mb-2">Appointment Booked Successfully!</h2>
+            <p className="text-gray-600 mb-6">
+              Your appointment has been booked with <strong>Dr. {doctor.full_name}</strong>
             </p>
-            <div className="bg-gray-50 rounded-lg p-4 text-left mb-6">
-              <p><strong>Date:</strong> {selectedDate && format(selectedDate, 'MMMM d, yyyy')}</p>
-              <p><strong>Time:</strong> {selectedSlot?.start} - {selectedSlot?.end}</p>
-              <p><strong>Type:</strong> {visitType === 'online' ? 'Online Consultation' : 'Physical Visit'}</p>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-left mb-6">
+              <div className="space-y-2">
+                <p className="flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4 text-green-600" />
+                  <span><strong>Date:</strong> {selectedDate && format(selectedDate, 'EEEE, MMMM d, yyyy')}</span>
+                </p>
+                <p className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-green-600" />
+                  <span><strong>Time:</strong> {selectedSlot?.start} - {selectedSlot?.end}</span>
+                </p>
+                <p className="flex items-center gap-2">
+                  {visitType === 'online' ? (
+                    <Video className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <MapPin className="h-4 w-4 text-green-600" />
+                  )}
+                  <span><strong>Type:</strong> {visitType === 'online' ? 'Online Consultation' : 'Physical Visit'}</span>
+                </p>
+              </div>
             </div>
+            {visitType === 'online' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <p className="text-blue-800 text-sm flex items-center gap-2">
+                  <Video className="h-4 w-4" />
+                  <span>The Zoom meeting link will be shared with you <strong>15 minutes before</strong> your appointment.</span>
+                </p>
+              </div>
+            )}
             <p className="text-sm text-gray-500">
-              Check your email for updates on your appointment status.
+              A confirmation has been sent to your email. Please check your inbox for further details.
             </p>
           </CardContent>
         </Card>

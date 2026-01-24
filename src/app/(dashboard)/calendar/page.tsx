@@ -276,6 +276,37 @@ export default function CalendarPage() {
   const handleSaveAvailability = async () => {
     if (!doctor) return
 
+    // Validate time slots before saving
+    for (const schedule of schedules) {
+      if (!schedule.is_active) continue
+
+      for (const slot of schedule.time_slots) {
+        // Check for empty times
+        if (!slot.start_time || !slot.end_time) {
+          toast.error('Invalid time slot', {
+            description: `${DAYS_OF_WEEK[schedule.day_of_week]}: Please set both start and end times`
+          })
+          return
+        }
+
+        // Check that start time is before end time
+        if (slot.start_time >= slot.end_time) {
+          toast.error('Invalid time range', {
+            description: `${DAYS_OF_WEEK[schedule.day_of_week]}: End time (${slot.end_time}) must be after start time (${slot.start_time})`
+          })
+          return
+        }
+
+        // Check that at least one visit type is selected
+        if (!slot.visit_type || slot.visit_type.length === 0) {
+          toast.error('Invalid visit type', {
+            description: `${DAYS_OF_WEEK[schedule.day_of_week]}: Please select at least one visit type (Online or Physical)`
+          })
+          return
+        }
+      }
+    }
+
     setSaving(true)
     const supabase = createClient()
 
@@ -689,23 +720,7 @@ export default function CalendarPage() {
                 modifiersClassNames={{
                   holiday: 'bg-red-100 text-red-600',
                   working: 'bg-green-100 text-green-600',
-                  hasAppointments: 'font-bold',
-                }}
-                components={{
-                  DayContent: ({ date }) => {
-                    const info = getDateInfo(date)
-                    const hasData = info.appointments > 0 || info.totalSlots > 0
-                    return (
-                      <div className="relative w-full h-full flex flex-col items-center justify-center">
-                        <span>{date.getDate()}</span>
-                        {hasData && info.appointments > 0 && (
-                          <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 flex gap-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" title={`${info.appointments} appointments`}></span>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  },
+                  hasAppointments: 'font-bold ring-2 ring-blue-400 ring-offset-1',
                 }}
               />
 
