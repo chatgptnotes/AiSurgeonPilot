@@ -50,7 +50,7 @@ export function NotificationBell() {
         const readIdsSet = storedReadIds ? new Set(JSON.parse(storedReadIds)) : new Set()
         setReadIds(readIdsSet as Set<string>)
 
-        const notificationItems: NotificationItem[] = data.map(apt => ({
+        const notificationItems: NotificationItem[] = data.map((apt: Appointment) => ({
           id: apt.id,
           appointment: apt,
           message: `${apt.patient_name} booked an appointment`,
@@ -75,7 +75,7 @@ export function NotificationBell() {
           table: 'doc_appointments',
           filter: doctor ? `doctor_id=eq.${doctor.id}` : undefined,
         },
-        (payload) => {
+        (payload: { new: Record<string, unknown> }) => {
           // New appointment created - add to notifications
           const apt = payload.new as Appointment
           if (apt.status === 'pending') {
@@ -97,7 +97,7 @@ export function NotificationBell() {
           table: 'doc_appointments',
           filter: doctor ? `doctor_id=eq.${doctor.id}` : undefined,
         },
-        (payload) => {
+        (payload: { new: Record<string, unknown> }) => {
           // Appointment updated - remove from notifications if confirmed/cancelled
           const apt = payload.new as Appointment
           if (apt.status !== 'pending') {
