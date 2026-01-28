@@ -84,10 +84,6 @@ export async function POST(request: NextRequest) {
       meeting_url: appointment.meeting_link,
       join_at: joinAt.toISOString(),
       bot_name: `AI Assistant - Dr. ${appointment.doctor.full_name}`,
-      transcription_options: {
-        provider: 'default',
-      },
-      recording_mode: 'speaker_view',
       automatic_leave: {
         waiting_room_timeout: 600, // 10 minutes
         noone_joined_timeout: 600, // 10 minutes

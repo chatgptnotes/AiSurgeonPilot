@@ -5,24 +5,10 @@ export interface RecallBotRequest {
   meeting_url: string
   join_at?: string // ISO 8601 timestamp for scheduled join
   bot_name?: string
-  transcription_options?: {
-    provider?: 'default' | 'assembly_ai' | 'deepgram' | 'gladia' | 'speechmatics'
-  }
-  recording_mode?: 'speaker_view' | 'gallery_view' | 'audio_only'
   automatic_leave?: {
     waiting_room_timeout?: number // seconds
     noone_joined_timeout?: number // seconds
     everyone_left_timeout?: number // seconds
-  }
-  automatic_video_output?: {
-    in_call_recording?: {
-      kind: 's3' | 'gcs' | 'azure_blob'
-      s3?: {
-        bucket: string
-        region: string
-        key?: string
-      }
-    }
   }
 }
 
@@ -83,10 +69,6 @@ export async function createRecallBot(options: RecallBotRequest): Promise<Recall
       meeting_url: options.meeting_url,
       join_at: options.join_at,
       bot_name: options.bot_name || 'AI Surgeon Assistant',
-      transcription_options: options.transcription_options || {
-        provider: 'default',
-      },
-      recording_mode: options.recording_mode || 'speaker_view',
       automatic_leave: options.automatic_leave || {
         waiting_room_timeout: 600, // 10 minutes
         noone_joined_timeout: 600, // 10 minutes
