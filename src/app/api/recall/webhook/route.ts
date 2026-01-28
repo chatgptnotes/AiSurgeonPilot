@@ -84,11 +84,15 @@ async function handleMeetingComplete(
   botId: string
 ) {
   try {
-    // Get the transcript from Recall
-    const transcript = await getRecallBotTranscript(botId)
-    const transcriptText = recallTranscriptToText(transcript)
-
-    console.log('Transcript length:', transcriptText.length)
+    // Try to get transcript, but don't fail if not available
+    let transcriptText = ''
+    try {
+      const transcript = await getRecallBotTranscript(botId)
+      transcriptText = recallTranscriptToText(transcript)
+      console.log('Transcript length:', transcriptText.length)
+    } catch (transcriptError) {
+      console.log('Could not fetch transcript (may not be enabled):', transcriptError)
+    }
 
     // Check if meeting record exists
     const { data: existingMeeting } = await supabase
@@ -99,33 +103,45 @@ async function handleMeetingComplete(
 
     if (existingMeeting) {
       // Update existing meeting with transcript
+      const updateData: any = { ended_at: new Date().toISOString() }
+      if (transcriptText) {
+        updateData.transcript = transcriptText
+      }
       await supabase
         .from('doc_meetings')
-        .update({
-          transcript: transcriptText,
-          ended_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', existingMeeting.id)
+      console.log('Updated existing meeting record')
     } else {
       // Create new meeting record
-      await supabase
+      const { error: insertError } = await supabase
         .from('doc_meetings')
         .insert({
           appointment_id: appointment.id,
           doctor_id: appointment.doctor_id,
           patient_id: appointment.patient_id || null,
-          transcript: transcriptText,
+          transcript: transcriptText || null,
           ended_at: new Date().toISOString(),
         })
+
+      if (insertError) {
+        console.error('Failed to create meeting record:', insertError)
+      } else {
+        console.log('Created new meeting record')
+      }
     }
 
     // Update appointment status to completed
-    await supabase
+    const { error: updateError } = await supabase
       .from('doc_appointments')
       .update({ status: 'completed' })
       .eq('id', appointment.id)
 
-    console.log('Meeting and transcript saved successfully')
+    if (updateError) {
+      console.error('Failed to update appointment status:', updateError)
+    } else {
+      console.log('Appointment marked as completed')
+    }
 
   } catch (error) {
     console.error('Error handling meeting complete:', error)

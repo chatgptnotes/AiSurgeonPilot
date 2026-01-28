@@ -111,18 +111,44 @@ export async function getRecallBot(botId: string): Promise<RecallBot> {
 }
 
 /**
- * Get bot transcript
+ * Get bot transcript from the new API
+ * Transcript is now in recordings[].media_shortcuts.transcript
  */
 export async function getRecallBotTranscript(botId: string): Promise<RecallTranscriptSegment[]> {
-  const response = await fetch(`${RECALL_API_BASE}/bot/${botId}/transcript`, {
-    headers: {
-      'Authorization': `Token ${RECALL_API_KEY}`,
-    },
-  })
+  // First get the bot details to find the transcript URL
+  const bot = await getRecallBot(botId)
 
+  // Find the recording with transcript
+  const recordings = (bot as any).recordings || []
+  if (recordings.length === 0) {
+    console.log('No recordings found for bot')
+    return []
+  }
+
+  const recording = recordings[0]
+  const transcript = recording?.media_shortcuts?.transcript
+
+  if (!transcript) {
+    console.log('Transcript not enabled for this recording')
+    return []
+  }
+
+  if (transcript.status?.code !== 'done') {
+    console.log('Transcript not ready yet, status:', transcript.status?.code)
+    return []
+  }
+
+  const downloadUrl = transcript.data?.download_url
+  if (!downloadUrl) {
+    console.log('No transcript download URL available')
+    return []
+  }
+
+  // Fetch the actual transcript
+  const response = await fetch(downloadUrl)
   if (!response.ok) {
     const error = await response.text()
-    throw new Error(`Failed to get Recall bot transcript: ${error}`)
+    throw new Error(`Failed to download transcript: ${error}`)
   }
 
   return response.json()
