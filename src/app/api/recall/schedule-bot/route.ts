@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { createRecallBot } from '@/lib/recall/client'
 
+// CORS headers for cross-origin requests from Patient Portal
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+// Handle CORS preflight requests
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders })
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -13,7 +25,7 @@ export async function POST(request: NextRequest) {
     if (!appointmentId) {
       return NextResponse.json(
         { error: 'Appointment ID is required' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       )
     }
 
@@ -30,7 +42,7 @@ export async function POST(request: NextRequest) {
       console.error('Appointment not found:', appointmentError)
       return NextResponse.json(
         { error: 'Appointment not found' },
-        { status: 404 }
+        { status: 404, headers: corsHeaders }
       )
     }
 
@@ -38,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (appointment.visit_type !== 'online') {
       return NextResponse.json(
         { error: 'Recall bot only needed for online appointments' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       )
     }
 
@@ -46,7 +58,7 @@ export async function POST(request: NextRequest) {
     if (!appointment.meeting_link) {
       return NextResponse.json(
         { error: 'No meeting link found for this appointment' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       )
     }
 
@@ -56,7 +68,7 @@ export async function POST(request: NextRequest) {
         success: true,
         bot_id: appointment.recall_bot_id,
         message: 'Bot already scheduled',
-      })
+      }, { headers: corsHeaders })
     }
 
     // Calculate join time (1 minute before appointment start)
@@ -100,13 +112,13 @@ export async function POST(request: NextRequest) {
       success: true,
       bot_id: bot.id,
       join_at: joinAt.toISOString(),
-    })
+    }, { headers: corsHeaders })
 
   } catch (error) {
     console.error('Error scheduling Recall bot:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to schedule bot' },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     )
   }
 }
