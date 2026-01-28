@@ -173,6 +173,7 @@ export interface Database {
           payment_id: string | null
           amount: number
           meeting_link: string | null
+          recall_bot_id: string | null
           notes: string | null
           created_at: string
           updated_at: string
@@ -193,6 +194,7 @@ export interface Database {
           payment_id?: string | null
           amount: number
           meeting_link?: string | null
+          recall_bot_id?: string | null
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -213,6 +215,7 @@ export interface Database {
           payment_id?: string | null
           amount?: number
           meeting_link?: string | null
+          recall_bot_id?: string | null
           notes?: string | null
           created_at?: string
           updated_at?: string

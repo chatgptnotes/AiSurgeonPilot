@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.redirect(
-      new URL('/meetings?zoom_connected=true', request.url)
+      new URL('/settings?zoom_connected=true', request.url)
     )
   } catch (error) {
     console.error('Error in Zoom callback:', error)

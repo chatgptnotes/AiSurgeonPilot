@@ -54,6 +54,40 @@ export interface ZoomRecordingsResponse {
   meetings: ZoomRecording[]
 }
 
+export interface ZoomMeetingRequest {
+  topic: string
+  type?: number // 1 = instant, 2 = scheduled
+  start_time: string // ISO 8601 format
+  duration: number // in minutes
+  timezone?: string
+  agenda?: string
+  settings?: {
+    host_video?: boolean
+    participant_video?: boolean
+    join_before_host?: boolean
+    mute_upon_entry?: boolean
+    waiting_room?: boolean
+    auto_recording?: 'none' | 'local' | 'cloud'
+  }
+}
+
+export interface ZoomMeetingResponse {
+  id: number
+  uuid: string
+  host_id: string
+  host_email: string
+  topic: string
+  type: number
+  status: string
+  start_time: string
+  duration: number
+  timezone: string
+  created_at: string
+  start_url: string
+  join_url: string
+  password: string
+}
+
 export function getZoomAuthUrl(state: string): string {
   const params = new URLSearchParams({
     response_type: 'code',
@@ -121,6 +155,43 @@ export async function getZoomUser(accessToken: string): Promise<ZoomUser> {
   if (!response.ok) {
     const error = await response.text()
     throw new Error(`Failed to get Zoom user: ${error}`)
+  }
+
+  return response.json()
+}
+
+export async function createZoomMeeting(
+  accessToken: string,
+  meetingDetails: ZoomMeetingRequest
+): Promise<ZoomMeetingResponse> {
+  const response = await fetch(`${ZOOM_API_BASE}/users/me/meetings`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      topic: meetingDetails.topic,
+      type: meetingDetails.type || 2, // Scheduled meeting
+      start_time: meetingDetails.start_time,
+      duration: meetingDetails.duration,
+      timezone: meetingDetails.timezone || 'Asia/Kolkata',
+      agenda: meetingDetails.agenda || '',
+      settings: {
+        host_video: true,
+        participant_video: true,
+        join_before_host: true,
+        mute_upon_entry: false,
+        waiting_room: false,
+        auto_recording: 'cloud',
+        ...meetingDetails.settings,
+      },
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to create Zoom meeting: ${error}`)
   }
 
   return response.json()

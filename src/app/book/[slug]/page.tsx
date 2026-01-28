@@ -299,7 +299,77 @@ export default function BookingPage() {
 
       if (error) throw error
 
-      // Send WhatsApp confirmation if phone number is provided
+      // Create Zoom meeting for online appointments
+      let meetingLink = null
+      if (visitType === 'online' && data) {
+        try {
+          const meetingResponse = await fetch('/api/zoom/create-meeting', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              appointmentId: data.id,
+            }),
+          })
+
+          if (meetingResponse.ok) {
+            const meetingData = await meetingResponse.json()
+            meetingLink = meetingData.meeting_link
+
+            // Schedule Recall.ai bot to join the meeting
+            if (meetingLink) {
+              try {
+                await fetch('/api/recall/schedule-bot', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    appointmentId: data.id,
+                  }),
+                })
+                console.log('Recall bot scheduled successfully')
+              } catch (recallError) {
+                // Don't fail the booking if Recall bot scheduling fails
+                console.error('Failed to schedule Recall bot:', recallError)
+              }
+            }
+
+            // Send meeting link via Email and WhatsApp
+            if (meetingLink) {
+              try {
+                await fetch('/api/notifications/send-meeting-link', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    appointmentId: data.id,
+                    patientName: patientDetails.name,
+                    patientEmail: patientDetails.email,
+                    patientPhone: patientDetails.phone || null,
+                    doctorName: doctor.full_name,
+                    appointmentDate: format(selectedDate, 'EEEE, MMMM d, yyyy'),
+                    startTime: `${selectedSlot.start} - ${selectedSlot.end}`,
+                    meetingLink: meetingLink,
+                    doctorId: doctor.id,
+                  }),
+                })
+              } catch (notifyError) {
+                console.error('Failed to send meeting link notification:', notifyError)
+              }
+            }
+          } else {
+            console.log('Zoom meeting creation failed, will use standard link or send later')
+          }
+        } catch (zoomError) {
+          // Don't fail the booking if Zoom meeting creation fails
+          console.error('Zoom meeting creation failed:', zoomError)
+        }
+      }
+
+      // Send WhatsApp confirmation for all appointments (with or without meeting link)
       if (patientDetails.phone) {
         try {
           await fetch('/api/notifications/booking-confirmation', {

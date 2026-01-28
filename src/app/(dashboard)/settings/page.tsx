@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Header } from '@/components/dashboard/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,8 +15,39 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useAuthStore } from '@/stores/auth-store'
 import { toast } from 'sonner'
-import { Loader2, Camera, Copy, Check, Video } from 'lucide-react'
+import { Loader2, Camera, Copy, Check, Video, Link2, Unlink, CheckCircle2, XCircle } from 'lucide-react'
 import slugify from 'slugify'
+
+// Component to handle URL params (needs Suspense)
+function ZoomCallbackHandler() {
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const zoomError = searchParams.get('zoom_error')
+    const zoomConnected = searchParams.get('zoom_connected')
+
+    if (zoomConnected === 'true') {
+      toast.success('Zoom account connected successfully!')
+      // Clean up URL
+      window.history.replaceState({}, '', '/settings')
+    }
+
+    if (zoomError) {
+      const errorMessages: Record<string, string> = {
+        'access_denied': 'Zoom authorization was denied',
+        'missing_params': 'Missing authorization parameters',
+        'unauthorized': 'Unauthorized request',
+        'save_failed': 'Failed to save Zoom credentials',
+        'unknown': 'An error occurred during Zoom connection',
+      }
+      toast.error(errorMessages[zoomError] || 'Failed to connect Zoom')
+      // Clean up URL
+      window.history.replaceState({}, '', '/settings')
+    }
+  }, [searchParams])
+
+  return null
+}
 
 export default function SettingsPage() {
   const { doctor, isLoading } = useAuth()
@@ -139,6 +171,9 @@ export default function SettingsPage() {
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <ZoomCallbackHandler />
+      </Suspense>
       <Header title="Settings" />
 
       <div className="p-6">
@@ -147,6 +182,7 @@ export default function SettingsPage() {
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="practice">Practice Details</TabsTrigger>
             <TabsTrigger value="booking">Booking Settings</TabsTrigger>
+            <TabsTrigger value="integrations">Integrations</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
 
@@ -390,6 +426,110 @@ export default function SettingsPage() {
                     Patients can use this link to book appointments directly with you. Share it on your website, social media, or business cards.
                   </AlertDescription>
                 </Alert>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="integrations" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Video className="h-5 w-5 text-blue-600" />
+                  Zoom Integration
+                </CardTitle>
+                <CardDescription>
+                  Connect your Zoom account to automatically create meeting links for online consultations
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {doctor?.zoom_connected_at ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <CheckCircle2 className="h-6 w-6 text-green-600" />
+                      <div>
+                        <p className="font-medium text-green-800">Zoom Connected</p>
+                        <p className="text-sm text-green-600">
+                          Connected on {new Date(doctor.zoom_connected_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <Alert>
+                      <AlertDescription>
+                        Your Zoom account is connected. Meeting links will be automatically created for online consultations.
+                      </AlertDescription>
+                    </Alert>
+                    <Button
+                      variant="outline"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={async () => {
+                        if (confirm('Are you sure you want to disconnect your Zoom account?')) {
+                          const supabase = createClient()
+                          await supabase
+                            .from('doc_doctors')
+                            .update({
+                              zoom_access_token: null,
+                              zoom_refresh_token: null,
+                              zoom_token_expires_at: null,
+                              zoom_user_id: null,
+                              zoom_connected_at: null,
+                            })
+                            .eq('id', doctor.id)
+                          toast.success('Zoom account disconnected')
+                          window.location.reload()
+                        }
+                      }}
+                    >
+                      <Unlink className="h-4 w-4 mr-2" />
+                      Disconnect Zoom
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      <XCircle className="h-6 w-6 text-gray-400" />
+                      <div>
+                        <p className="font-medium text-gray-700">Zoom Not Connected</p>
+                        <p className="text-sm text-gray-500">
+                          Connect your Zoom account to enable automatic meeting creation
+                        </p>
+                      </div>
+                    </div>
+                    <Alert>
+                      <AlertDescription>
+                        By connecting Zoom, you allow the app to create meeting links on your behalf when patients book online consultations.
+                      </AlertDescription>
+                    </Alert>
+                    <Button
+                      className="bg-blue-600 hover:bg-blue-700"
+                      onClick={() => {
+                        window.location.href = '/api/zoom/authorize'
+                      }}
+                    >
+                      <Link2 className="h-4 w-4 mr-2" />
+                      Connect Zoom Account
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Recall.ai Integration</CardTitle>
+                <CardDescription>
+                  Automatic meeting transcription and summarization (Coming Soon)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="h-6 w-6 rounded-full bg-yellow-400 flex items-center justify-center text-white text-sm font-bold">!</div>
+                  <div>
+                    <p className="font-medium text-yellow-800">Coming Soon</p>
+                    <p className="text-sm text-yellow-600">
+                      Automatic transcription and AI summarization will be available soon
+                    </p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

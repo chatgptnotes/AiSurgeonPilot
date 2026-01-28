@@ -339,6 +339,17 @@ export default function AppointmentsPage() {
               {appointment.meeting_link ? 'Edit Link' : 'Add Link'}
             </Button>
           )}
+          {appointment.visit_type === 'online' && appointment.meeting_link && (
+            <Button
+              size="sm"
+              variant="default"
+              className="bg-green-600 hover:bg-green-700"
+              onClick={() => window.open(appointment.meeting_link!, '_blank')}
+            >
+              <Video className="h-4 w-4 mr-1" />
+              Join
+            </Button>
+          )}
           {appointment.status === 'confirmed' && (
             <Button
               size="sm"
