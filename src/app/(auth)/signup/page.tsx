@@ -1,181 +1,56 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2 } from 'lucide-react'
+import { Shield, ArrowLeft } from 'lucide-react'
 
 export default function SignupPage() {
-  const router = useRouter()
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  })
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }))
-  }
-
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters')
-      return
-    }
-
-    setIsLoading(true)
-
-    try {
-      // Call our API route to create user and profile
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          fullName: formData.fullName,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Failed to create account')
-        setIsLoading(false)
-        return
-      }
-
-      // Now sign in the user
-      const supabase = createClient()
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
-      })
-
-      if (signInError) {
-        setError(signInError.message)
-        setIsLoading(false)
-        return
-      }
-
-      router.push('/dashboard')
-      router.refresh()
-    } catch (err) {
-      console.error('Signup error:', err)
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
-      setIsLoading(false)
-    }
-  }
-
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Create Account</CardTitle>
-        <CardDescription>Register as a doctor on AI Surgeon Pilot</CardDescription>
+    <Card className="w-full max-w-md">
+      <CardHeader className="text-center">
+        <div className="mx-auto mb-4 p-3 bg-indigo-100 rounded-full w-fit">
+          <Shield className="h-8 w-8 text-indigo-600" />
+        </div>
+        <CardTitle>Registration Disabled</CardTitle>
+        <CardDescription>
+          Self-registration is not available for this platform
+        </CardDescription>
       </CardHeader>
-      <form onSubmit={handleSignup}>
-        <CardContent className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          <div className="space-y-2">
-            <Label htmlFor="fullName">Full Name</Label>
-            <Input
-              id="fullName"
-              name="fullName"
-              type="text"
-              placeholder="Dr. John Doe"
-              value={formData.fullName}
-              onChange={handleChange}
-              required
-              disabled={isLoading}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="doctor@example.com"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              disabled={isLoading}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              placeholder="Create a password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              disabled={isLoading}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <Input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              placeholder="Confirm your password"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              required
-              disabled={isLoading}
-            />
-          </div>
-        </CardContent>
-        <CardFooter className="flex flex-col space-y-4">
-          <Button
-            type="submit"
-            className="w-full bg-green-600 hover:bg-green-700"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating account...
-              </>
-            ) : (
-              'Create Account'
-            )}
-          </Button>
-          <p className="text-sm text-center text-gray-600">
-            Already have an account?{' '}
-            <Link href="/login" className="text-green-600 hover:text-green-700 font-medium">
-              Sign in
-            </Link>
-          </p>
-        </CardFooter>
-      </form>
+      <CardContent className="space-y-4">
+        <Alert>
+          <AlertDescription className="text-center">
+            Doctor accounts are created by the platform administrator.
+            If you are a doctor and need access, please contact your organization&apos;s admin.
+          </AlertDescription>
+        </Alert>
+
+        <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+          <p className="text-sm font-medium text-gray-700">How to get access:</p>
+          <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
+            <li>Contact your organization&apos;s administrator</li>
+            <li>Provide your professional details</li>
+            <li>Administrator will create your account</li>
+            <li>You will receive login credentials via email</li>
+          </ol>
+        </div>
+
+        <div className="text-center">
+          <p className="text-sm text-gray-500 mb-2">Already have credentials?</p>
+          <Link href="/login">
+            <Button className="w-full bg-green-600 hover:bg-green-700">
+              Sign In
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+      <CardFooter className="flex justify-center">
+        <Link href="/" className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Home
+        </Link>
+      </CardFooter>
     </Card>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useState, Suspense, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Header } from '@/components/dashboard/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -54,6 +54,8 @@ export default function SettingsPage() {
   const setDoctor = useAuthStore(state => state.setDoctor)
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -152,6 +154,64 @@ export default function SettingsPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !doctor) return
+
+    // Validate file type
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Please upload a valid image (JPEG, PNG, or WebP)')
+      return
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB')
+      return
+    }
+
+    setUploadingImage(true)
+    const supabase = createClient()
+
+    try {
+      const fileExt = file.name.split('.').pop()
+      const filePath = `${doctor.user_id}/profile.${fileExt}`
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('doctor-profiles')
+        .upload(filePath, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('doctor-profiles')
+        .getPublicUrl(filePath)
+
+      // Update database
+      const { error: updateError } = await supabase
+        .from('doc_doctors')
+        .update({ profile_image: publicUrl })
+        .eq('id', doctor.id)
+
+      if (updateError) throw updateError
+
+      // Update local state
+      setDoctor({ ...doctor, profile_image: publicUrl })
+      toast.success('Profile photo updated!')
+    } catch (error) {
+      console.error('Upload error:', error)
+      toast.error('Failed to upload image')
+    } finally {
+      setUploadingImage(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -201,9 +261,25 @@ export default function SettingsPage() {
                       {formData.full_name ? getInitials(formData.full_name) : 'DR'}
                     </AvatarFallback>
                   </Avatar>
-                  <Button variant="outline" className="gap-2">
-                    <Camera className="h-4 w-4" />
-                    Change Photo
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleImageUpload}
+                  />
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingImage}
+                  >
+                    {uploadingImage ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Camera className="h-4 w-4" />
+                    )}
+                    {uploadingImage ? 'Uploading...' : 'Change Photo'}
                   </Button>
                 </div>
 

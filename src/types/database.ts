@@ -26,6 +26,11 @@ export interface Database {
           consultation_fee: number | null
           online_fee: number | null
           booking_slug: string | null
+          designation: string | null
+          department: string | null
+          city: string | null
+          state: string | null
+          pincode: string | null
           stripe_account_id: string | null
           standard_meeting_link: string | null
           zoom_access_token: string | null
@@ -34,6 +39,10 @@ export interface Database {
           zoom_user_id: string | null
           zoom_connected_at: string | null
           is_verified: boolean
+          role: 'superadmin' | 'admin_clinical' | 'doctor'
+          must_change_password: boolean
+          created_by: string | null
+          is_active: boolean
           created_at: string
           updated_at: string
         }
@@ -53,6 +62,11 @@ export interface Database {
           consultation_fee?: number | null
           online_fee?: number | null
           booking_slug?: string | null
+          designation?: string | null
+          department?: string | null
+          city?: string | null
+          state?: string | null
+          pincode?: string | null
           stripe_account_id?: string | null
           standard_meeting_link?: string | null
           zoom_access_token?: string | null
@@ -61,6 +75,10 @@ export interface Database {
           zoom_user_id?: string | null
           zoom_connected_at?: string | null
           is_verified?: boolean
+          role?: 'superadmin' | 'admin_clinical' | 'doctor'
+          must_change_password?: boolean
+          created_by?: string | null
+          is_active?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -80,6 +98,11 @@ export interface Database {
           consultation_fee?: number | null
           online_fee?: number | null
           booking_slug?: string | null
+          designation?: string | null
+          department?: string | null
+          city?: string | null
+          state?: string | null
+          pincode?: string | null
           stripe_account_id?: string | null
           standard_meeting_link?: string | null
           zoom_access_token?: string | null
@@ -88,6 +111,10 @@ export interface Database {
           zoom_user_id?: string | null
           zoom_connected_at?: string | null
           is_verified?: boolean
+          role?: 'superadmin' | 'admin_clinical' | 'doctor'
+          must_change_password?: boolean
+          created_by?: string | null
+          is_active?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -711,3 +738,6 @@ export type PatientAllergyUpdate = Database['public']['Tables']['doc_patient_all
 export type PatientMedication = Database['public']['Tables']['doc_patient_medications']['Row']
 export type PatientMedicationInsert = Database['public']['Tables']['doc_patient_medications']['Insert']
 export type PatientMedicationUpdate = Database['public']['Tables']['doc_patient_medications']['Update']
+
+// Role type for authorization
+export type UserRole = 'superadmin' | 'admin_clinical' | 'doctor'

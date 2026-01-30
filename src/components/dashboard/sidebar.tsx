@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAuth } from '@/hooks/use-auth'
 import { SidebarCalendarStats } from './sidebar-calendar-stats'
 import {
@@ -211,11 +210,11 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 px-3 py-4">
+      <div className="flex-1 overflow-y-auto px-3 py-4">
         <nav className="space-y-1">
           {navItems.map(item => renderNavItem(item))}
         </nav>
-      </ScrollArea>
+      </div>
 
       {/* Bottom Actions */}
       <div className="p-4 border-t space-y-2">
@@ -264,14 +263,14 @@ export function Sidebar() {
       )}
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white border-r">
+      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white border-r overflow-hidden">
         {sidebarContent}
       </aside>
 
       {/* Mobile Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-white border-r transform transition-transform duration-200 ease-in-out lg:hidden flex flex-col',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-white border-r transform transition-transform duration-200 ease-in-out lg:hidden flex flex-col overflow-hidden',
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >

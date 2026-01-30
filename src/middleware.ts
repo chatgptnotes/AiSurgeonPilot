@@ -31,12 +31,19 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login') ||
-    request.nextUrl.pathname.startsWith('/signup') ||
-    request.nextUrl.pathname.startsWith('/forgot-password')
+  const pathname = request.nextUrl.pathname
 
-  const isPublicPage = request.nextUrl.pathname.startsWith('/book/') ||
-    request.nextUrl.pathname === '/'
+  const isAuthPage = pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/change-password') ||
+    pathname.startsWith('/request-account')
+
+  const isPublicPage = pathname.startsWith('/book/') ||
+    pathname === '/'
+
+  const isSuperAdminPage = pathname.startsWith('/superadmin')
+  const isAdminClinicalPage = pathname.startsWith('/admin-clinical')
 
   // If user is not authenticated and trying to access protected routes
   if (!user && !isAuthPage && !isPublicPage) {
@@ -45,11 +52,66 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // If user is authenticated and trying to access auth pages
-  if (user && isAuthPage) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+  // If user is authenticated, check role for proper routing
+  if (user) {
+    // Fetch user's doctor profile to get role
+    const { data: doctor } = await supabase
+      .from('doc_doctors')
+      .select('role, must_change_password, is_active')
+      .eq('user_id', user.id)
+      .single()
+
+    // Check if account is deactivated
+    if (doctor && doctor.is_active === false && !isAuthPage) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'account_deactivated')
+      // Sign out the user
+      await supabase.auth.signOut()
+      return NextResponse.redirect(url)
+    }
+
+    // Check if must change password (redirect to change-password page)
+    if (doctor?.must_change_password && !pathname.startsWith('/change-password')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/change-password'
+      return NextResponse.redirect(url)
+    }
+
+    // If authenticated and on auth page, redirect based on role
+    if (isAuthPage && !pathname.startsWith('/change-password')) {
+      const url = request.nextUrl.clone()
+      if (doctor?.role === 'superadmin') {
+        url.pathname = '/superadmin'
+      } else if (doctor?.role === 'admin_clinical') {
+        url.pathname = '/admin-clinical'
+      } else {
+        url.pathname = '/dashboard'
+      }
+      return NextResponse.redirect(url)
+    }
+
+    // If non-superadmin trying to access superadmin pages
+    if (isSuperAdminPage && doctor?.role !== 'superadmin') {
+      const url = request.nextUrl.clone()
+      if (doctor?.role === 'admin_clinical') {
+        url.pathname = '/admin-clinical'
+      } else {
+        url.pathname = '/dashboard'
+      }
+      return NextResponse.redirect(url)
+    }
+
+    // If non-admin trying to access admin-clinical pages
+    if (isAdminClinicalPage && doctor?.role !== 'admin_clinical') {
+      const url = request.nextUrl.clone()
+      if (doctor?.role === 'superadmin') {
+        url.pathname = '/superadmin'
+      } else {
+        url.pathname = '/dashboard'
+      }
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse
