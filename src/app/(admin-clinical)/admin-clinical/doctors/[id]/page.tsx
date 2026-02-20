@@ -11,6 +11,10 @@ import { Separator } from '@/components/ui/separator'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Calendar as CalendarComponent } from '@/components/ui/calendar'
+import { format, parse, isBefore, isAfter, isSameDay } from 'date-fns'
 import {
   ArrowLeft,
   Edit,
@@ -18,15 +22,40 @@ import {
   Phone,
   MapPin,
   Briefcase,
-  Calendar,
-  DollarSign,
   UserCheck,
   UserX,
   Loader2,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  Video,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  X,
+  CalendarClock,
+  Ban,
+  Check
 } from 'lucide-react'
-import { Doctor } from '@/types/database'
+import { Doctor, Appointment, Availability, AvailabilityOverride } from '@/types/database'
+
+interface TimeSlot {
+  start: string
+  end: string
+  available: boolean
+}
+
+const statusColors: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  confirmed: 'bg-green-100 text-green-800',
+  completed: 'bg-blue-100 text-blue-800',
+  cancelled: 'bg-red-100 text-red-800',
+}
+
+const paymentColors: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  paid: 'bg-green-100 text-green-800',
+  refunded: 'bg-gray-100 text-gray-800',
+}
 
 interface Stats {
   totalAppointments: number
@@ -46,8 +75,22 @@ export default function DoctorDetailPage() {
     totalPatients: 0,
     revenue: 0,
   })
+  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [showAppointments, setShowAppointments] = useState(false)
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [updatingAptId, setUpdatingAptId] = useState<string | null>(null)
+
+  // Reschedule state
+  const [showRescheduleDialog, setShowRescheduleDialog] = useState(false)
+  const [rescheduleApt, setRescheduleApt] = useState<Appointment | null>(null)
+  const [rescheduleDate, setRescheduleDate] = useState<Date | undefined>(undefined)
+  const [rescheduleSlot, setRescheduleSlot] = useState<TimeSlot | null>(null)
+  const [rescheduleLoading, setRescheduleLoading] = useState(false)
+  const [doctorAvailability, setDoctorAvailability] = useState<Availability[]>([])
+  const [doctorOverrides, setDoctorOverrides] = useState<AvailabilityOverride[]>([])
+  const [existingBookings, setExistingBookings] = useState<Appointment[]>([])
 
   useEffect(() => {
     if (currentUser?.id) {
@@ -113,6 +156,251 @@ export default function DoctorDetailPage() {
     })
 
     setIsLoading(false)
+  }
+
+  const fetchAppointments = async () => {
+    setAppointmentsLoading(true)
+    const supabase = createClient()
+
+    const { data, error } = await supabase
+      .from('doc_appointments')
+      .select('*')
+      .eq('doctor_id', params.id)
+      .order('appointment_date', { ascending: false })
+      .order('start_time', { ascending: false })
+
+    if (error) {
+      toast.error('Failed to load appointments')
+    } else {
+      setAppointments(data || [])
+    }
+    setAppointmentsLoading(false)
+  }
+
+  const handleToggleAppointments = () => {
+    if (!showAppointments && appointments.length === 0) {
+      fetchAppointments()
+    }
+    setShowAppointments(!showAppointments)
+  }
+
+  const handleConfirmAppointment = async (apt: Appointment) => {
+    setUpdatingAptId(apt.id)
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from('doc_appointments')
+      .update({ status: 'confirmed' })
+      .eq('id', apt.id)
+
+    if (error) {
+      toast.error('Failed to confirm appointment')
+    } else {
+      setAppointments(prev =>
+        prev.map(a => a.id === apt.id ? { ...a, status: 'confirmed' } : a)
+      )
+      toast.success('Appointment confirmed')
+    }
+    setUpdatingAptId(null)
+  }
+
+  const handleCancelAppointment = async (apt: Appointment) => {
+    setUpdatingAptId(apt.id)
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from('doc_appointments')
+      .update({ status: 'cancelled' })
+      .eq('id', apt.id)
+
+    if (error) {
+      toast.error('Failed to cancel appointment')
+    } else {
+      // Notify the doctor
+      const cancelNotif = {
+        doctor_id: apt.doctor_id,
+        appointment_id: apt.id,
+        type: 'in_app' as const,
+        channel: 'admin_action',
+        status: 'sent' as const,
+        title: 'Appointment Cancelled',
+        message: `Appointment with ${apt.patient_name} on ${format(new Date(apt.appointment_date), 'MMM d, yyyy')} at ${apt.start_time?.slice(0, 5)} has been cancelled by admin.`,
+        is_read: false,
+      }
+      await supabase.from('doc_notifications').insert(cancelNotif)
+
+      // Notify the patient (if registered)
+      if (apt.patient_id) {
+        await supabase.from('doc_notifications').insert({
+          ...cancelNotif,
+          patient_id: apt.patient_id,
+          message: `Your appointment on ${format(new Date(apt.appointment_date), 'MMM d, yyyy')} at ${apt.start_time?.slice(0, 5)} has been cancelled.`,
+        })
+      }
+
+      setAppointments(prev =>
+        prev.map(a => a.id === apt.id ? { ...a, status: 'cancelled' } : a)
+      )
+      toast.success('Appointment cancelled')
+    }
+    setUpdatingAptId(null)
+  }
+
+  const openRescheduleDialog = async (apt: Appointment) => {
+    setRescheduleApt(apt)
+    setRescheduleDate(undefined)
+    setRescheduleSlot(null)
+    setShowRescheduleDialog(true)
+
+    // Fetch doctor availability, overrides, and existing bookings
+    const supabase = createClient()
+
+    const [availRes, overrideRes, bookingsRes] = await Promise.all([
+      supabase
+        .from('doc_availability')
+        .select('*')
+        .eq('doctor_id', params.id)
+        .eq('is_active', true),
+      supabase
+        .from('doc_availability_overrides')
+        .select('*')
+        .eq('doctor_id', params.id)
+        .gte('date', new Date().toISOString().split('T')[0]),
+      supabase
+        .from('doc_appointments')
+        .select('*')
+        .eq('doctor_id', params.id)
+        .in('status', ['pending', 'confirmed'])
+        .gte('appointment_date', new Date().toISOString().split('T')[0]),
+    ])
+
+    setDoctorAvailability(availRes.data || [])
+    setDoctorOverrides(overrideRes.data || [])
+    setExistingBookings(bookingsRes.data || [])
+  }
+
+  const getAvailableSlots = (date: Date): TimeSlot[] => {
+    const dayOfWeek = date.getDay()
+    const dateStr = format(date, 'yyyy-MM-dd')
+
+    const override = doctorOverrides.find(o => o.date === dateStr)
+    if (override && !override.is_available) return []
+
+    const visitType = rescheduleApt?.visit_type || 'online'
+    const dayAvailability = doctorAvailability.filter(a =>
+      a.day_of_week === dayOfWeek && a.visit_type.includes(visitType)
+    )
+
+    if (dayAvailability.length === 0) return []
+
+    const slots: TimeSlot[] = []
+
+    dayAvailability.forEach(avail => {
+      const startTime = parse(avail.start_time, 'HH:mm:ss', date)
+      const endTime = parse(avail.end_time, 'HH:mm:ss', date)
+      const slotDuration = avail.slot_duration
+
+      let current = startTime
+      while (isBefore(current, endTime)) {
+        const slotEnd = new Date(current.getTime() + slotDuration * 60000)
+        if (isAfter(slotEnd, endTime)) break
+
+        const slotStartStr = format(current, 'HH:mm')
+        const slotEndStr = format(slotEnd, 'HH:mm')
+
+        const isBooked = existingBookings.some(apt =>
+          apt.id !== rescheduleApt?.id &&
+          apt.appointment_date === dateStr &&
+          apt.start_time === slotStartStr + ':00'
+        )
+
+        const isPast = isSameDay(date, new Date()) && isBefore(current, new Date())
+
+        slots.push({
+          start: slotStartStr,
+          end: slotEndStr,
+          available: !isBooked && !isPast,
+        })
+
+        current = slotEnd
+      }
+    })
+
+    return slots
+  }
+
+  const isDayAvailable = (date: Date): boolean => {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    const dayOfWeek = date.getDay()
+
+    const override = doctorOverrides.find(o => o.date === dateStr)
+    if (override) return override.is_available
+
+    return doctorAvailability.some(a => a.day_of_week === dayOfWeek && a.is_active)
+  }
+
+  const handleReschedule = async () => {
+    if (!rescheduleApt || !rescheduleDate || !rescheduleSlot) return
+
+    setRescheduleLoading(true)
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from('doc_appointments')
+      .update({
+        appointment_date: format(rescheduleDate, 'yyyy-MM-dd'),
+        start_time: rescheduleSlot.start + ':00',
+        end_time: rescheduleSlot.end + ':00',
+        status: 'confirmed',
+      })
+      .eq('id', rescheduleApt.id)
+
+    // Mark as rescheduled (column may not exist yet)
+    await supabase
+      .from('doc_appointments')
+      .update({ is_rescheduled: true } as any)
+      .eq('id', rescheduleApt.id)
+      .then(() => {})
+      .catch(() => {})
+
+    if (error) {
+      toast.error('Failed to reschedule appointment')
+    } else {
+      // Notify the doctor
+      const rescheduleNotif = {
+        doctor_id: rescheduleApt.doctor_id,
+        appointment_id: rescheduleApt.id,
+        type: 'in_app' as const,
+        channel: 'admin_action',
+        status: 'sent' as const,
+        title: 'Appointment Rescheduled',
+        message: `Appointment with ${rescheduleApt.patient_name} has been rescheduled to ${format(rescheduleDate, 'MMM d, yyyy')} at ${rescheduleSlot.start} by admin.`,
+        is_read: false,
+      }
+      await supabase.from('doc_notifications').insert(rescheduleNotif)
+
+      // Notify the patient (if registered)
+      if (rescheduleApt.patient_id) {
+        await supabase.from('doc_notifications').insert({
+          ...rescheduleNotif,
+          patient_id: rescheduleApt.patient_id,
+          message: `Your appointment has been rescheduled to ${format(rescheduleDate, 'MMM d, yyyy')} at ${rescheduleSlot.start}.`,
+        })
+      }
+
+      setAppointments(prev =>
+        prev.map(a => a.id === rescheduleApt.id ? {
+          ...a,
+          appointment_date: format(rescheduleDate, 'yyyy-MM-dd'),
+          start_time: rescheduleSlot.start + ':00',
+          end_time: rescheduleSlot.end + ':00',
+          status: 'confirmed',
+        } : a)
+      )
+      toast.success(`Appointment rescheduled to ${format(rescheduleDate, 'MMM d, yyyy')} at ${rescheduleSlot.start}`)
+      setShowRescheduleDialog(false)
+    }
+    setRescheduleLoading(false)
   }
 
   const handleVerify = async (verify: boolean) => {
@@ -283,9 +571,21 @@ export default function DoctorDetailPage() {
             <CardTitle className="text-lg">Statistics</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Total Appointments</span>
-              <span className="font-bold">{stats.totalAppointments}</span>
+            <div
+              className="flex justify-between cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-1 rounded-md transition-colors"
+              onClick={handleToggleAppointments}
+            >
+              <span className="text-teal-600 font-medium underline decoration-dotted underline-offset-4">
+                Total Appointments
+              </span>
+              <div className="flex items-center gap-1">
+                <span className="font-bold">{stats.totalAppointments}</span>
+                {showAppointments ? (
+                  <ChevronUp className="h-4 w-4 text-gray-400" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-gray-400" />
+                )}
+              </div>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Completed</span>
@@ -431,6 +731,228 @@ export default function DoctorDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Appointments Table */}
+      {showAppointments && (
+        <Card className="mt-6">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg">
+              Appointments ({appointments.length})
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowAppointments(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            {appointmentsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
+              </div>
+            ) : appointments.length === 0 ? (
+              <div className="text-center py-12">
+                <Clock className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p className="text-gray-500">No appointments found</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Patient</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Date & Time</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {appointments.map((apt) => (
+                    <TableRow key={apt.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{apt.patient_name}</p>
+                          <p className="text-sm text-gray-500">{apt.patient_email}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {apt.patient_phone ? (
+                          <span className="text-sm">{apt.patient_phone}</span>
+                        ) : (
+                          <span className="text-sm text-gray-400">N/A</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p>{format(new Date(apt.appointment_date), 'MMM d, yyyy')}</p>
+                          <p className="text-sm text-gray-500">
+                            {apt.start_time?.slice(0, 5)} - {apt.end_time?.slice(0, 5)}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="gap-1">
+                          {apt.visit_type === 'online' ? (
+                            <Video className="h-3 w-3" />
+                          ) : (
+                            <MapPin className="h-3 w-3" />
+                          )}
+                          {apt.visit_type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={statusColors[apt.status] || 'bg-gray-100 text-gray-800'}>
+                          {apt.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={paymentColors[apt.payment_status] || 'bg-gray-100 text-gray-800'}>
+                          {apt.payment_status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">₹{apt.amount}</TableCell>
+                      <TableCell>
+                        {(apt.status === 'pending' || apt.status === 'confirmed') && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {apt.status === 'pending' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-green-600 gap-1"
+                                onClick={() => handleConfirmAppointment(apt)}
+                                disabled={updatingAptId === apt.id}
+                              >
+                                {updatingAptId === apt.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Check className="h-3.5 w-3.5" />
+                                )}
+                                Confirm
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-blue-600 gap-1"
+                              onClick={() => openRescheduleDialog(apt)}
+                              disabled={updatingAptId === apt.id}
+                            >
+                              <CalendarClock className="h-3.5 w-3.5" />
+                              Reschedule
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 gap-1"
+                              onClick={() => handleCancelAppointment(apt)}
+                              disabled={updatingAptId === apt.id}
+                            >
+                              {updatingAptId === apt.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Ban className="h-3.5 w-3.5" />
+                              )}
+                              Cancel
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Reschedule Dialog */}
+      <Dialog open={showRescheduleDialog} onOpenChange={setShowRescheduleDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Reschedule Appointment</DialogTitle>
+          </DialogHeader>
+          {rescheduleApt && (
+            <div className="space-y-4">
+              <div className="bg-gray-50 rounded-lg p-3 text-sm">
+                <p className="font-medium">{rescheduleApt.patient_name}</p>
+                <p className="text-gray-500">
+                  Current: {format(new Date(rescheduleApt.appointment_date), 'MMM d, yyyy')} at{' '}
+                  {rescheduleApt.start_time?.slice(0, 5)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-2">Select New Date</p>
+                <CalendarComponent
+                  mode="single"
+                  selected={rescheduleDate}
+                  onSelect={(date) => {
+                    setRescheduleDate(date)
+                    setRescheduleSlot(null)
+                  }}
+                  disabled={(date) =>
+                    isBefore(date, new Date(new Date().setHours(0, 0, 0, 0))) ||
+                    !isDayAvailable(date)
+                  }
+                  className="rounded-md border mx-auto"
+                />
+              </div>
+
+              {rescheduleDate && (
+                <div>
+                  <p className="text-sm font-medium mb-2">
+                    Available Slots for {format(rescheduleDate, 'MMM d, yyyy')}
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                    {getAvailableSlots(rescheduleDate).filter(s => s.available).length === 0 ? (
+                      <p className="col-span-3 text-sm text-gray-500 text-center py-4">
+                        No available slots on this date
+                      </p>
+                    ) : (
+                      getAvailableSlots(rescheduleDate)
+                        .filter(s => s.available)
+                        .map((slot) => (
+                          <Button
+                            key={slot.start}
+                            size="sm"
+                            variant={rescheduleSlot?.start === slot.start ? 'default' : 'outline'}
+                            className={rescheduleSlot?.start === slot.start ? 'bg-teal-600 hover:bg-teal-700' : ''}
+                            onClick={() => setRescheduleSlot(slot)}
+                          >
+                            {slot.start}
+                          </Button>
+                        ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRescheduleDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleReschedule}
+              disabled={!rescheduleDate || !rescheduleSlot || rescheduleLoading}
+              className="bg-teal-600 hover:bg-teal-700"
+            >
+              {rescheduleLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <CalendarClock className="h-4 w-4 mr-2" />
+              )}
+              Reschedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -339,33 +339,45 @@ export interface Database {
           doctor_id: string
           patient_id: string | null
           appointment_id: string | null
-          type: 'email' | 'whatsapp' | 'sms'
+          type: 'email' | 'whatsapp' | 'sms' | 'in_app'
           channel: string
           status: 'sent' | 'failed' | 'pending'
           sent_at: string | null
           metadata: Json | null
+          title: string | null
+          message: string | null
+          is_read: boolean
+          created_at: string
         }
         Insert: {
           id?: string
           doctor_id: string
           patient_id?: string | null
           appointment_id?: string | null
-          type: 'email' | 'whatsapp' | 'sms'
+          type: 'email' | 'whatsapp' | 'sms' | 'in_app'
           channel: string
           status?: 'sent' | 'failed' | 'pending'
           sent_at?: string | null
           metadata?: Json | null
+          title?: string | null
+          message?: string | null
+          is_read?: boolean
+          created_at?: string
         }
         Update: {
           id?: string
           doctor_id?: string
           patient_id?: string | null
           appointment_id?: string | null
-          type?: 'email' | 'whatsapp' | 'sms'
+          type?: 'email' | 'whatsapp' | 'sms' | 'in_app'
           channel?: string
           status?: 'sent' | 'failed' | 'pending'
           sent_at?: string | null
           metadata?: Json | null
+          title?: string | null
+          message?: string | null
+          is_read?: boolean
+          created_at?: string
         }
       }
       doc_followups: {
