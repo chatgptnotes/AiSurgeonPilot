@@ -75,9 +75,9 @@ export default function AdminClinicalDashboard() {
       .order('created_at', { ascending: false })
 
     if (!error && doctors) {
-      const active = doctors.filter(d => d.is_active).length
-      const verified = doctors.filter(d => d.is_verified).length
-      const pending = doctors.filter(d => !d.is_verified).length
+      const active = doctors.filter((d: any) => d.is_active).length
+      const verified = doctors.filter((d: any) => d.is_verified).length
+      const pending = doctors.filter((d: any) => !d.is_verified).length
 
       setStats({
         total: doctors.length,
