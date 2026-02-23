@@ -14,7 +14,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { Video, FileText, Sparkles, Loader2, Eye, Mic, Link2, Download, CheckCircle } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Video, FileText, Sparkles, Loader2, Eye, Mic, Link2, Download, CheckCircle, Save, ExternalLink } from 'lucide-react'
 import type { Meeting, Appointment } from '@/types/database'
 
 interface ZoomRecording {
@@ -42,6 +43,8 @@ export default function MeetingsPage() {
   const [loadingRecordings, setLoadingRecordings] = useState(false)
   const [fetchingTranscript, setFetchingTranscript] = useState(false)
   const [selectedZoomRecording, setSelectedZoomRecording] = useState<string | null>(null)
+  const [meetingLink, setMeetingLink] = useState('')
+  const [savingLink, setSavingLink] = useState(false)
 
   useEffect(() => {
     const fetchMeetings = async () => {
@@ -68,6 +71,9 @@ export default function MeetingsPage() {
 
       // Check if Zoom is connected
       setZoomConnected(!!doctor.zoom_connected_at)
+
+      // Load standard meeting link
+      setMeetingLink(doctor.standard_meeting_link || '')
     }
 
     if (doctor) {
@@ -88,6 +94,23 @@ export default function MeetingsPage() {
 
   const connectZoom = () => {
     window.location.href = '/api/zoom/authorize'
+  }
+
+  const saveMeetingLink = async () => {
+    if (!doctor) return
+    setSavingLink(true)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('doc_doctors')
+      .update({ standard_meeting_link: meetingLink.trim() || null })
+      .eq('id', doctor.id)
+
+    if (error) {
+      toast.error('Failed to save meeting link')
+    } else {
+      toast.success('Meeting link saved successfully')
+    }
+    setSavingLink(false)
   }
 
   const fetchZoomRecordings = async () => {
@@ -226,18 +249,62 @@ export default function MeetingsPage() {
       <Header title="Meetings" />
 
       <div className="p-6 space-y-6">
-        {/* Info Card */}
+        {/* Standard Meeting Link Card */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-blue-600" />
+              Standard Meeting Link
+            </CardTitle>
+            <CardDescription>
+              Paste your meeting link (Zoom, Google Meet, etc.) that will be shared with patients for all online consultations.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3">
+              <Input
+                value={meetingLink}
+                onChange={(e) => setMeetingLink(e.target.value)}
+                placeholder="https://zoom.us/j/... or https://meet.google.com/..."
+                className="flex-1"
+              />
+              <Button onClick={saveMeetingLink} disabled={savingLink} className="bg-blue-600 hover:bg-blue-700">
+                {savingLink ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save
+              </Button>
+              {meetingLink && (
+                <Button variant="outline" size="icon" asChild>
+                  <a href={meetingLink} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </Button>
+              )}
+            </div>
+            {doctor?.standard_meeting_link && (
+              <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                <CheckCircle className="h-3 w-3" />
+                Link saved and will be shared with patients for online appointments
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* AI Info Card */}
         <Card className="bg-blue-50 border-blue-200">
           <CardContent className="p-4 flex items-start gap-4">
             <Sparkles className="h-6 w-6 text-blue-600 mt-0.5" />
             <div className="flex-1">
               <p className="font-medium text-blue-800">AI-Powered Meeting Summaries</p>
               <p className="text-sm text-blue-600">
-                Connect your Zoom account to automatically fetch meeting transcripts, or paste them manually. AI will generate summaries, diagnosis notes, and prescriptions using Google Gemini.
+                Paste meeting transcripts manually or connect Zoom to auto-fetch. AI will generate summaries, diagnosis notes, and prescriptions using Google Gemini.
               </p>
             </div>
             {!zoomConnected ? (
-              <Button onClick={connectZoom} className="bg-blue-600 hover:bg-blue-700">
+              <Button variant="outline" onClick={connectZoom} size="sm">
                 <Link2 className="h-4 w-4 mr-2" />
                 Connect Zoom
               </Button>

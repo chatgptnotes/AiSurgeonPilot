@@ -50,6 +50,8 @@ export default function BookingPage() {
     name: '',
     email: '',
     phone: '',
+    hasInsurance: false,
+    insuranceDetails: '',
   })
 
   useEffect(() => {
@@ -279,6 +281,10 @@ export default function BookingPage() {
       // All validations passed - proceed with booking
       const fee = visitType === 'online' ? doctor.online_fee : doctor.consultation_fee
 
+      const insuranceNote = patientDetails.hasInsurance && patientDetails.insuranceDetails
+        ? `Insurance: ${patientDetails.insuranceDetails}`
+        : patientDetails.hasInsurance ? 'Has insurance (details not provided)' : null
+
       const { data, error } = await supabase
         .from('doc_appointments')
         .insert({
@@ -293,6 +299,7 @@ export default function BookingPage() {
           amount: fee || 0,
           status: 'pending',
           payment_status: 'pending',
+          notes: insuranceNote,
         })
         .select()
         .single()
@@ -696,6 +703,42 @@ export default function BookingPage() {
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Insurance Question */}
+              <div className="space-y-3">
+                <Label>Do you have insurance?</Label>
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant={patientDetails.hasInsurance ? 'default' : 'outline'}
+                    size="sm"
+                    className={patientDetails.hasInsurance ? 'bg-green-600 hover:bg-green-700' : ''}
+                    onClick={() => setPatientDetails(p => ({ ...p, hasInsurance: true }))}
+                  >
+                    Yes
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={!patientDetails.hasInsurance ? 'default' : 'outline'}
+                    size="sm"
+                    className={!patientDetails.hasInsurance ? 'bg-gray-600 hover:bg-gray-700' : ''}
+                    onClick={() => setPatientDetails(p => ({ ...p, hasInsurance: false, insuranceDetails: '' }))}
+                  >
+                    No
+                  </Button>
+                </div>
+                {patientDetails.hasInsurance && (
+                  <div className="space-y-2">
+                    <Label htmlFor="insurance">Insurance Provider / Policy Number</Label>
+                    <Input
+                      id="insurance"
+                      placeholder="e.g. Star Health - Policy #12345"
+                      value={patientDetails.insuranceDetails}
+                      onChange={(e) => setPatientDetails(p => ({ ...p, insuranceDetails: e.target.value }))}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-4">
