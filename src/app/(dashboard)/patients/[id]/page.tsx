@@ -149,7 +149,7 @@ export default function PatientDetailPage() {
         supabase
           .from('doc_patient_reports')
           .select('*')
-          .eq('doc_patient_id', patientId)
+          .or(`doc_patient_id.eq.${patientId},patient_id.eq.${patientId}`)
           .eq('doctor_id', doctor.id)
           .order('created_at', { ascending: false }),
       ])
@@ -754,13 +754,13 @@ export default function PatientDetailPage() {
                           variant="outline"
                           size="sm"
                           className="gap-2"
-                          onClick={async () => {
+                          onClick={() => {
                             const supabase = createClient()
-                            const { data } = await supabase.storage
+                            const { data } = supabase.storage
                               .from('doctor-prescriptions')
-                              .createSignedUrl(doc.file_url, 3600)
-                            if (data?.signedUrl) {
-                              window.open(data.signedUrl, '_blank')
+                              .getPublicUrl(doc.file_url)
+                            if (data?.publicUrl) {
+                              window.open(data.publicUrl, '_blank')
                             } else {
                               toast.error('Could not open document')
                             }
