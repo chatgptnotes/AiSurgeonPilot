@@ -87,7 +87,7 @@ export default function AdminClinicalDashboard() {
       })
 
       // Fetch appointment statistics
-      const doctorIds = doctors.map(d => d.id)
+      const doctorIds = doctors.map((d: any) => d.id)
 
       if (doctorIds.length > 0) {
         // Total appointments
