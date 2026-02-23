@@ -107,11 +107,11 @@ export default function PatientByEmailPage() {
     return null
   }
 
-  const completedAppointments = appointments.filter(a => a.status === 'completed')
-  const upcomingAppointments = appointments.filter(a => a.status === 'confirmed' || a.status === 'pending')
+  const completedAppointments = appointments.filter((a: any) => a.status === 'completed')
+  const upcomingAppointments = appointments.filter((a: any) => a.status === 'confirmed' || a.status === 'pending')
   const totalSpent = appointments
-    .filter(a => a.payment_status === 'paid')
-    .reduce((sum, a) => sum + (a.amount || 0), 0)
+    .filter((a: any) => a.payment_status === 'paid')
+    .reduce((sum: number, a: any) => sum + (a.amount || 0), 0)
 
   return (
     <div>

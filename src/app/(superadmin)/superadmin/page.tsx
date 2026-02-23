@@ -69,7 +69,7 @@ export default function SuperAdminDashboard() {
 
       // Get doctor counts for each admin
       const adminsWithCounts = await Promise.all(
-        adminClinicals.slice(0, 5).map(async (admin) => {
+        adminClinicals.slice(0, 5).map(async (admin: any) => {
           const { count } = await supabase
             .from('doc_doctors')
             .select('*', { count: 'exact', head: true })

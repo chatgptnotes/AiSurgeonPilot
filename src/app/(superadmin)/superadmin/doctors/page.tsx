@@ -94,7 +94,7 @@ export default function DoctorsListPage() {
     } else {
       // Fetch creator names for doctors with created_by
       const doctorsWithCreators = await Promise.all(
-        (data || []).map(async (doctor) => {
+        (data || []).map(async (doctor: any) => {
           if (doctor.created_by) {
             const { data: creator } = await supabase
               .from('doc_doctors')

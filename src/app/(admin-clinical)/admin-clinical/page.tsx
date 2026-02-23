@@ -118,7 +118,7 @@ export default function AdminClinicalDashboard() {
           .in('doctor_id', doctorIds)
           .eq('payment_status', 'paid')
 
-        const totalRevenue = revenueData?.reduce((sum, a) => sum + (a.amount || 0), 0) || 0
+        const totalRevenue = revenueData?.reduce((sum: number, a: any) => sum + (a.amount || 0), 0) || 0
 
         setAppointmentStats({
           totalAppointments: totalAppts || 0,
@@ -129,7 +129,7 @@ export default function AdminClinicalDashboard() {
 
         // Fetch appointment count per doctor for recent doctors list
         const doctorsWithStats = await Promise.all(
-          doctors.slice(0, 5).map(async (doc) => {
+          doctors.slice(0, 5).map(async (doc: any) => {
             const { count } = await supabase
               .from('doc_appointments')
               .select('*', { count: 'exact', head: true })

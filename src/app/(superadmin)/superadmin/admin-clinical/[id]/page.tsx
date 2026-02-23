@@ -106,14 +106,14 @@ export default function AdminClinicalDetailPage() {
     if (doctorsData) {
       // Get patient and appointment counts for each doctor
       const doctorsWithStats = await Promise.all(
-        doctorsData.map(async (doc) => {
+        doctorsData.map(async (doc: any) => {
           // Get unique patients from appointments
           const { data: appointmentsData } = await supabase
             .from('doc_appointments')
             .select('patient_email')
             .eq('doctor_id', doc.id)
 
-          const uniquePatients = new Set(appointmentsData?.map(a => a.patient_email) || [])
+          const uniquePatients = new Set(appointmentsData?.map((a: any) => a.patient_email) || [])
 
           // Get appointment count
           const { count: apptCount } = await supabase
@@ -132,8 +132,8 @@ export default function AdminClinicalDetailPage() {
       setDoctors(doctorsWithStats)
 
       // Calculate total stats
-      const totalPatients = doctorsWithStats.reduce((sum, d) => sum + d.patientCount, 0)
-      const totalAppointments = doctorsWithStats.reduce((sum, d) => sum + d.appointmentCount, 0)
+      const totalPatients = doctorsWithStats.reduce((sum: number, d: any) => sum + d.patientCount, 0)
+      const totalAppointments = doctorsWithStats.reduce((sum: number, d: any) => sum + d.appointmentCount, 0)
 
       setStats({
         doctorsCount: doctorsData.length,
@@ -142,7 +142,7 @@ export default function AdminClinicalDetailPage() {
       })
 
       // Fetch unique patients across all doctors
-      const doctorIds = doctorsData.map(d => d.id)
+      const doctorIds = doctorsData.map((d: any) => d.id)
       if (doctorIds.length > 0) {
         const { data: allAppointments } = await supabase
           .from('doc_appointments')
@@ -153,7 +153,7 @@ export default function AdminClinicalDetailPage() {
         if (allAppointments) {
           // Get unique patients
           const uniquePatientsMap = new Map()
-          allAppointments.forEach(apt => {
+          allAppointments.forEach((apt: any) => {
             if (!uniquePatientsMap.has(apt.patient_email)) {
               uniquePatientsMap.set(apt.patient_email, {
                 id: apt.patient_email,
