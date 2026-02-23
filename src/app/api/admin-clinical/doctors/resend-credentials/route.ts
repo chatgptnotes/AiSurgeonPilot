@@ -121,6 +121,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Credentials resent successfully',
+      password: newPassword,
     })
   } catch (error) {
     console.error('Resend credentials error:', error)

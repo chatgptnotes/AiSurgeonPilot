@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   ArrowLeft,
   Edit,
@@ -23,7 +24,10 @@ import {
   UserX,
   Loader2,
   ExternalLink,
-  Activity
+  Activity,
+  Copy,
+  Check,
+  CheckCircle2
 } from 'lucide-react'
 
 interface Doctor {
@@ -70,6 +74,8 @@ export default function DoctorDetailPage() {
   })
   const [isLoading, setIsLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [resendCredentials, setResendCredentials] = useState<{ password: string } | null>(null)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
 
   useEffect(() => {
     fetchDoctorDetails()
@@ -180,11 +186,13 @@ export default function DoctorDetailPage() {
         body: JSON.stringify({ doctorId: doctor.id }),
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        throw new Error('Failed to resend credentials')
+        throw new Error(data.error || 'Failed to resend credentials')
       }
 
-      toast.success('New credentials sent successfully')
+      setResendCredentials({ password: data.password })
     } catch (error) {
       toast.error('Failed to resend credentials')
     }
@@ -480,6 +488,78 @@ export default function DoctorDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Resend Credentials Dialog */}
+      <Dialog open={!!resendCredentials} onOpenChange={() => setResendCredentials(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              New Credentials Generated
+            </DialogTitle>
+          </DialogHeader>
+          {resendCredentials && doctor && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                New password generated for <strong>{doctor.full_name}</strong>. Share these credentials with the doctor.
+              </p>
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500">Email</p>
+                    <p className="font-mono text-sm">{doctor.email}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(doctor.email)
+                      setCopiedField('email')
+                      toast.success('Email copied')
+                      setTimeout(() => setCopiedField(null), 2000)
+                    }}
+                  >
+                    {copiedField === 'email' ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500">New Password</p>
+                    <p className="font-mono text-sm">{resendCredentials.password}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(resendCredentials.password)
+                      setCopiedField('password')
+                      toast.success('Password copied')
+                      setTimeout(() => setCopiedField(null), 2000)
+                    }}
+                  >
+                    {copiedField === 'password' ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-xs text-amber-800">
+                  The doctor will be required to change their password on first login.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              className="w-full bg-indigo-600 hover:bg-indigo-700"
+              onClick={() => setResendCredentials(null)}
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
