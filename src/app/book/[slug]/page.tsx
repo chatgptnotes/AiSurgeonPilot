@@ -24,6 +24,8 @@ import {
   User,
   Mail,
   Phone,
+  ExternalLink,
+  Copy,
 } from 'lucide-react'
 import type { Doctor, Availability, AvailabilityOverride, Appointment } from '@/types/database'
 
@@ -45,6 +47,7 @@ export default function BookingPage() {
   const [visitType, setVisitType] = useState<'online' | 'physical'>('online')
   const [step, setStep] = useState<'select' | 'details' | 'payment' | 'success'>('select')
   const [submitting, setSubmitting] = useState(false)
+  const [bookedMeetingLink, setBookedMeetingLink] = useState<string | null>(null)
 
   const [patientDetails, setPatientDetails] = useState({
     name: '',
@@ -323,6 +326,7 @@ export default function BookingPage() {
           if (meetingResponse.ok) {
             const meetingData = await meetingResponse.json()
             meetingLink = meetingData.meeting_link
+            setBookedMeetingLink(meetingLink)
 
             // Schedule Recall.ai bot to join the meeting
             if (meetingLink) {
@@ -470,11 +474,42 @@ export default function BookingPage() {
                 </p>
               </div>
             </div>
-            {visitType === 'online' && (
+            {visitType === 'online' && bookedMeetingLink && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
+                <p className="text-blue-800 text-sm font-semibold flex items-center gap-2 mb-3">
+                  <Video className="h-4 w-4" />
+                  Your Meeting Link
+                </p>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={bookedMeetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 inline-flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Join Meeting
+                  </a>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(bookedMeetingLink)
+                    }}
+                    className="inline-flex items-center justify-center gap-1 border border-gray-300 bg-white px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy
+                  </button>
+                </div>
+                <p className="text-blue-700 text-xs mt-2">
+                  This link has also been sent to your email and WhatsApp.
+                </p>
+              </div>
+            )}
+            {visitType === 'online' && !bookedMeetingLink && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                 <p className="text-blue-800 text-sm flex items-center gap-2">
                   <Video className="h-4 w-4" />
-                  <span>The Zoom meeting link will be shared with you <strong>15 minutes before</strong> your appointment.</span>
+                  <span>The meeting link will be shared with you via email and WhatsApp once the doctor confirms your appointment.</span>
                 </p>
               </div>
             )}

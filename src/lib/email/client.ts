@@ -1,12 +1,20 @@
-import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
 
-let resendClient: Resend | null = null
+let transporter: nodemailer.Transporter | null = null
 
-function getResendClient(): Resend {
-  if (!resendClient) {
-    resendClient = new Resend(process.env.RESEND_API_KEY)
+function getTransporter(): nodemailer.Transporter {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.zoho.in',
+      port: Number(process.env.SMTP_PORT) || 465,
+      secure: true, // SSL
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    })
   }
-  return resendClient
+  return transporter
 }
 
 interface EmailOptions {
@@ -17,18 +25,21 @@ interface EmailOptions {
 }
 
 export async function sendEmail({ to, subject, html, from }: EmailOptions) {
-  const { data, error } = await getResendClient().emails.send({
-    from: from || 'AI Surgeon Pilot <noreply@aisurgeonpilot.com>',
+  const defaultFrom = process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@aisurgeonpilot.com'
+
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn('SMTP credentials not configured (SMTP_USER / SMTP_PASS). Skipping email.')
+    return null
+  }
+
+  const info = await getTransporter().sendMail({
+    from: from || `AI Surgeon Pilot <${defaultFrom}>`,
     to,
     subject,
     html,
   })
 
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return data
+  return { id: info.messageId }
 }
 
 // Email templates

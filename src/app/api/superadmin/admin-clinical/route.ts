@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { verifySuperAdmin, isAuthError } from '@/lib/auth/verify-role'
+import { sendEmail } from '@/lib/email/client'
 
 // POST - Create new admin clinical
 export async function POST(request: NextRequest) {
@@ -213,67 +214,48 @@ async function sendCredentialsEmail({
   password: string
   loginUrl: string
 }) {
-  const resendApiKey = process.env.RESEND_API_KEY
-  if (!resendApiKey) {
-    console.log('Resend API key not configured, skipping email')
-    return
-  }
+  await sendEmail({
+    to: email,
+    subject: 'Welcome to AiSurgeonPilot - Admin Clinical Account',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to AiSurgeonPilot</h1>
+        </div>
 
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${resendApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: 'AiSurgeonPilot <noreply@aisurgeonpilot.com>',
-      to: email,
-      subject: 'Welcome to AiSurgeonPilot - Admin Clinical Account',
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); padding: 30px; border-radius: 10px 10px 0 0;">
-            <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to AiSurgeonPilot</h1>
+        <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
+          <p>Dear ${fullName},</p>
+
+          <p>Your Admin Clinical account has been created on AiSurgeonPilot. As an Admin Clinical, you will be able to create and manage doctor accounts.</p>
+
+          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <p style="margin: 0 0 10px 0;"><strong>Email:</strong> ${email}</p>
+            <p style="margin: 0 0 10px 0;"><strong>Temporary Password:</strong> <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px;">${password}</code></p>
+            <p style="margin: 0;"><strong>Login URL:</strong> <a href="${loginUrl}/login" style="color: #4F46E5;">${loginUrl}/login</a></p>
           </div>
 
-          <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
-            <p>Dear ${fullName},</p>
-
-            <p>Your Admin Clinical account has been created on AiSurgeonPilot. As an Admin Clinical, you will be able to create and manage doctor accounts.</p>
-
-            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 20px 0;">
-              <p style="margin: 0 0 10px 0;"><strong>Email:</strong> ${email}</p>
-              <p style="margin: 0 0 10px 0;"><strong>Temporary Password:</strong> <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px;">${password}</code></p>
-              <p style="margin: 0;"><strong>Login URL:</strong> <a href="${loginUrl}/login" style="color: #4F46E5;">${loginUrl}/login</a></p>
-            </div>
-
-            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 4px;">
-              <p style="margin: 0; color: #92400E;"><strong>Important:</strong> For security, you will be required to change your password on first login.</p>
-            </div>
-
-            <p>If you have any questions, please contact your administrator.</p>
-
-            <p>Best regards,<br>AiSurgeonPilot Team</p>
+          <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; color: #92400E;"><strong>Important:</strong> For security, you will be required to change your password on first login.</p>
           </div>
 
-          <p style="text-align: center; color: #9CA3AF; font-size: 12px; margin-top: 20px;">
-            This is an automated message. Please do not reply to this email.
-          </p>
-        </body>
-        </html>
-      `,
-    }),
+          <p>If you have any questions, please contact your administrator.</p>
+
+          <p>Best regards,<br>AiSurgeonPilot Team</p>
+        </div>
+
+        <p style="text-align: center; color: #9CA3AF; font-size: 12px; margin-top: 20px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
+      </body>
+      </html>
+    `,
   })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || 'Failed to send email')
-  }
 }
 
 // Helper function to send credentials via WhatsApp
