@@ -213,6 +213,7 @@ export default function PatientDetailPage() {
   const [showPrintPreview, setShowPrintPreview] = useState(false)
   const [printData, setPrintData] = useState<any>(null)
   const [printType, setPrintType] = useState<'prescription' | 'consultation'>('prescription')
+  const [sendingToPatient, setSendingToPatient] = useState(false)
 
   // Follow-up appointment state
   const [followUpDays, setFollowUpDays] = useState('7')
@@ -817,6 +818,40 @@ export default function PatientDetailPage() {
     `)
     printWindow.document.close()
     setShowPrintPreview(false)
+  }
+
+  const handleSendToPatient = async (type?: 'prescription' | 'consultation', data?: any) => {
+    const docType = type || printType
+    const docData = data || printData
+    
+    if (!docData || !patient?.id) return
+
+    setSendingToPatient(true)
+    try {
+      const response = await fetch('/api/prescriptions/send-to-patient', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: docType,
+          data: docData,
+          patientId: patient.id,
+          appointmentId: docData.appointment_id || null
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to send')
+      }
+
+      const result = await response.json()
+      toast.success(result.message || 'Document sent to patient!')
+      setShowPrintPreview(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send document to patient')
+    } finally {
+      setSendingToPatient(false)
+    }
   }
 
   // ---- Follow-up Appointment Handler ----
@@ -1453,6 +1488,16 @@ export default function PatientDetailPage() {
                             )}
                           </div>
                           <div className="flex gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="gap-1 border-blue-300 text-blue-700 hover:bg-blue-50"
+                              onClick={() => handleSendToPatient('consultation', note)}
+                              disabled={sendingToPatient}
+                            >
+                              {sendingToPatient ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                              Send
+                            </Button>
                             <Button variant="outline" size="sm" className="gap-1" onClick={() => openPrintPreview('consultation', note)}>
                               <Printer className="h-3.5 w-3.5" />
                               Print
@@ -1689,6 +1734,16 @@ export default function PatientDetailPage() {
                               <Badge variant="outline">{items.length} medication{items.length !== 1 ? 's' : ''}</Badge>
                             </div>
                             <div className="flex gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="gap-1 border-blue-300 text-blue-700 hover:bg-blue-50"
+                                onClick={() => handleSendToPatient('prescription', rx)}
+                                disabled={sendingToPatient}
+                              >
+                                {sendingToPatient ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                                Send
+                              </Button>
                               <Button variant="outline" size="sm" className="gap-1" onClick={() => openPrintPreview('prescription', rx)}>
                                 <Printer className="h-3.5 w-3.5" />
                                 Print
