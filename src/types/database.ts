@@ -24,7 +24,11 @@ export interface Database {
           profile_image: string | null
           bio: string | null
           consultation_fee: number | null
+          consultation_fee_inr: number | null
+          consultation_fee_usd: number | null
           online_fee: number | null
+          online_fee_inr: number | null
+          online_fee_usd: number | null
           booking_slug: string | null
           designation: string | null
           department: string | null
@@ -60,7 +64,11 @@ export interface Database {
           profile_image?: string | null
           bio?: string | null
           consultation_fee?: number | null
+          consultation_fee_inr?: number | null
+          consultation_fee_usd?: number | null
           online_fee?: number | null
+          online_fee_inr?: number | null
+          online_fee_usd?: number | null
           booking_slug?: string | null
           designation?: string | null
           department?: string | null
@@ -96,7 +104,11 @@ export interface Database {
           profile_image?: string | null
           bio?: string | null
           consultation_fee?: number | null
+          consultation_fee_inr?: number | null
+          consultation_fee_usd?: number | null
           online_fee?: number | null
+          online_fee_inr?: number | null
+          online_fee_usd?: number | null
           booking_slug?: string | null
           designation?: string | null
           department?: string | null
@@ -202,6 +214,9 @@ export interface Database {
           meeting_link: string | null
           recall_bot_id: string | null
           notes: string | null
+          reminder_sent: string | null
+          reminder_12h_email_sent: string | null
+          reminder_30m_email_sent: string | null
           created_at: string
           updated_at: string
         }
@@ -223,6 +238,9 @@ export interface Database {
           meeting_link?: string | null
           recall_bot_id?: string | null
           notes?: string | null
+          reminder_sent?: string | null
+          reminder_12h_email_sent?: string | null
+          reminder_30m_email_sent?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -244,6 +262,9 @@ export interface Database {
           meeting_link?: string | null
           recall_bot_id?: string | null
           notes?: string | null
+          reminder_sent?: string | null
+          reminder_12h_email_sent?: string | null
+          reminder_30m_email_sent?: string | null
           created_at?: string
           updated_at?: string
         }

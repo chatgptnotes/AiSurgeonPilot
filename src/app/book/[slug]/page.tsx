@@ -24,8 +24,6 @@ import {
   User,
   Mail,
   Phone,
-  ExternalLink,
-  Copy,
 } from 'lucide-react'
 import type { Doctor, Availability, AvailabilityOverride, Appointment } from '@/types/database'
 
@@ -47,7 +45,6 @@ export default function BookingPage() {
   const [visitType, setVisitType] = useState<'online' | 'physical'>('online')
   const [step, setStep] = useState<'select' | 'details' | 'payment' | 'success'>('select')
   const [submitting, setSubmitting] = useState(false)
-  const [bookedMeetingLink, setBookedMeetingLink] = useState<string | null>(null)
 
   const [patientDetails, setPatientDetails] = useState({
     name: '',
@@ -300,8 +297,9 @@ export default function BookingPage() {
           end_time: selectedSlot.end + ':00',
           visit_type: visitType,
           amount: fee || 0,
-          status: 'pending',
+          status: 'confirmed',
           payment_status: 'pending',
+          meeting_link: visitType === 'online' ? (doctor.standard_meeting_link || null) : null,
           notes: insuranceNote,
         })
         .select()
@@ -309,78 +307,7 @@ export default function BookingPage() {
 
       if (error) throw error
 
-      // Create Zoom meeting for online appointments
-      let meetingLink = null
-      if (visitType === 'online' && data) {
-        try {
-          const meetingResponse = await fetch('/api/zoom/create-meeting', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              appointmentId: data.id,
-            }),
-          })
-
-          if (meetingResponse.ok) {
-            const meetingData = await meetingResponse.json()
-            meetingLink = meetingData.meeting_link
-            setBookedMeetingLink(meetingLink)
-
-            // Schedule Recall.ai bot to join the meeting
-            if (meetingLink) {
-              try {
-                await fetch('/api/recall/schedule-bot', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    appointmentId: data.id,
-                  }),
-                })
-                console.log('Recall bot scheduled successfully')
-              } catch (recallError) {
-                // Don't fail the booking if Recall bot scheduling fails
-                console.error('Failed to schedule Recall bot:', recallError)
-              }
-            }
-
-            // Send meeting link via Email and WhatsApp
-            if (meetingLink) {
-              try {
-                await fetch('/api/notifications/send-meeting-link', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    appointmentId: data.id,
-                    patientName: patientDetails.name,
-                    patientEmail: patientDetails.email,
-                    patientPhone: patientDetails.phone || null,
-                    doctorName: doctor.full_name,
-                    appointmentDate: format(selectedDate, 'EEEE, MMMM d, yyyy'),
-                    startTime: `${selectedSlot.start} - ${selectedSlot.end}`,
-                    meetingLink: meetingLink,
-                    doctorId: doctor.id,
-                  }),
-                })
-              } catch (notifyError) {
-                console.error('Failed to send meeting link notification:', notifyError)
-              }
-            }
-          } else {
-            console.log('Zoom meeting creation failed, will use standard link or send later')
-          }
-        } catch (zoomError) {
-          // Don't fail the booking if Zoom meeting creation fails
-          console.error('Zoom meeting creation failed:', zoomError)
-        }
-      }
-
-      // Send WhatsApp confirmation for all appointments (with or without meeting link)
+      // Send WhatsApp confirmation for all appointments
       if (patientDetails.phone) {
         try {
           await fetch('/api/notifications/booking-confirmation', {
@@ -474,42 +401,11 @@ export default function BookingPage() {
                 </p>
               </div>
             </div>
-            {visitType === 'online' && bookedMeetingLink && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
-                <p className="text-blue-800 text-sm font-semibold flex items-center gap-2 mb-3">
-                  <Video className="h-4 w-4" />
-                  Your Meeting Link
-                </p>
-                <div className="flex items-center gap-2">
-                  <a
-                    href={bookedMeetingLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 inline-flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Join Meeting
-                  </a>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(bookedMeetingLink)
-                    }}
-                    className="inline-flex items-center justify-center gap-1 border border-gray-300 bg-white px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    <Copy className="h-4 w-4" />
-                    Copy
-                  </button>
-                </div>
-                <p className="text-blue-700 text-xs mt-2">
-                  This link has also been sent to your email and WhatsApp.
-                </p>
-              </div>
-            )}
-            {visitType === 'online' && !bookedMeetingLink && (
+            {visitType === 'online' && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                 <p className="text-blue-800 text-sm flex items-center gap-2">
                   <Video className="h-4 w-4" />
-                  <span>The meeting link will be shared with you via email and WhatsApp once the doctor confirms your appointment.</span>
+                  <span>You will receive the meeting link via email 30 minutes before your appointment.</span>
                 </p>
               </div>
             )}

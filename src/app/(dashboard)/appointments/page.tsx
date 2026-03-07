@@ -122,7 +122,7 @@ export default function AppointmentsPage() {
     // Find the appointment
     const appointment = appointments.find(apt => apt.id === id)
 
-    // If confirming an online appointment, include the meeting link and send notifications
+    // If confirming an online appointment, save the meeting link for scheduled reminders
     if (status === 'confirmed' && appointment?.visit_type === 'online' && doctor?.standard_meeting_link) {
       const { error } = await supabase
         .from('doc_appointments')
@@ -138,41 +138,7 @@ export default function AppointmentsPage() {
         return
       }
 
-      // Send meeting link via Email and WhatsApp
-      try {
-        const response = await fetch('/api/notifications/send-meeting-link', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appointmentId: id,
-            patientName: appointment.patient_name,
-            patientEmail: appointment.patient_email,
-            patientPhone: appointment.patient_phone,
-            doctorName: doctor.full_name,
-            appointmentDate: format(new Date(appointment.appointment_date), 'MMMM d, yyyy'),
-            startTime: appointment.start_time,
-            meetingLink: doctor.standard_meeting_link,
-            doctorId: doctor.id,
-          }),
-        })
-
-        const result = await response.json()
-
-        if (result.success) {
-          const notifications = []
-          if (result.results.email.success) notifications.push('Email')
-          if (result.results.whatsapp.success) notifications.push('WhatsApp')
-
-          if (notifications.length > 0) {
-            toast.success(`Appointment confirmed! Meeting link sent via ${notifications.join(' & ')}`)
-          } else {
-            toast.success('Appointment confirmed! (Notifications may have failed)')
-          }
-        }
-      } catch (notifyError) {
-        console.error('Notification error:', notifyError)
-        toast.success('Appointment confirmed! (Failed to send notifications)')
-      }
+      toast.success('Appointment confirmed! Meeting link will be emailed to the patient 30 minutes before the appointment.')
 
       setAppointments(prev =>
         prev.map(apt => apt.id === id ? {

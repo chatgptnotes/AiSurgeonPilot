@@ -139,6 +139,106 @@ export const emailTemplates = {
     </html>
   `,
 
+  appointmentReminder12h: ({
+    patientName,
+    doctorName,
+    date,
+    time,
+  }: {
+    patientName: string
+    doctorName: string
+    date: string
+    time: string
+  }) => `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #16a34a; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { padding: 20px; background: #f9f9f9; }
+        .details { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Appointment Reminder</h1>
+        </div>
+        <div class="content">
+          <p>Dear ${patientName},</p>
+          <p>This is a friendly reminder that your online consultation is coming up.</p>
+          <div class="details">
+            <p><strong>Doctor:</strong> ${doctorName}</p>
+            <p><strong>Date:</strong> ${date}</p>
+            <p><strong>Time:</strong> ${time}</p>
+            <p><strong>Visit Type:</strong> Online Video Consultation</p>
+          </div>
+          <p>You will receive the meeting link 30 minutes before your appointment time.</p>
+          <p>If you need to reschedule or cancel, please do so at your earliest convenience.</p>
+        </div>
+        <div class="footer">
+          <p>AI Surgeon Pilot - Digital Healthcare Platform</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `,
+
+  appointmentReminder30m: ({
+    patientName,
+    doctorName,
+    time,
+    meetingLink,
+  }: {
+    patientName: string
+    doctorName: string
+    time: string
+    meetingLink: string
+  }) => `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #16a34a; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { padding: 20px; background: #f9f9f9; }
+        .button { display: inline-block; background: #16a34a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; margin: 15px 0; font-weight: bold; }
+        .meeting-link { word-break: break-all; color: #16a34a; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Your Appointment Starts in 30 Minutes!</h1>
+        </div>
+        <div class="content">
+          <p>Dear ${patientName},</p>
+          <p>Your online consultation with <strong>${doctorName}</strong> is starting soon at <strong>${time}</strong>.</p>
+          <p style="text-align: center;">
+            <a href="${meetingLink}" class="button">Join Meeting</a>
+          </p>
+          <p>Or copy this link: <span class="meeting-link">${meetingLink}</span></p>
+          <h4>Before Your Appointment:</h4>
+          <ul>
+            <li>Test your camera and microphone</li>
+            <li>Ensure you have a stable internet connection</li>
+            <li>Find a quiet, well-lit space</li>
+            <li>Have any relevant medical reports ready</li>
+          </ul>
+        </div>
+        <div class="footer">
+          <p>AI Surgeon Pilot - Digital Healthcare Platform</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `,
+
   appointmentCancelled: ({
     patientName,
     doctorName,

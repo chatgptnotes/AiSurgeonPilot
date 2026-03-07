@@ -67,7 +67,11 @@ export default function SettingsPage() {
     clinic_address: '',
     bio: '',
     consultation_fee: '',
+    consultation_fee_inr: '',
+    consultation_fee_usd: '',
     online_fee: '',
+    online_fee_inr: '',
+    online_fee_usd: '',
     booking_slug: '',
     standard_meeting_link: '',
   })
@@ -85,7 +89,11 @@ export default function SettingsPage() {
         clinic_address: doctor.clinic_address || '',
         bio: doctor.bio || '',
         consultation_fee: doctor.consultation_fee?.toString() || '',
+        consultation_fee_inr: doctor.consultation_fee_inr?.toString() || '',
+        consultation_fee_usd: doctor.consultation_fee_usd?.toString() || '',
         online_fee: doctor.online_fee?.toString() || '',
+        online_fee_inr: doctor.online_fee_inr?.toString() || '',
+        online_fee_usd: doctor.online_fee_usd?.toString() || '',
         booking_slug: doctor.booking_slug || '',
         standard_meeting_link: doctor.standard_meeting_link || '',
       })
@@ -125,7 +133,11 @@ export default function SettingsPage() {
         clinic_address: formData.clinic_address || null,
         bio: formData.bio || null,
         consultation_fee: formData.consultation_fee ? parseFloat(formData.consultation_fee) : null,
+        consultation_fee_inr: formData.consultation_fee_inr ? parseFloat(formData.consultation_fee_inr) : null,
+        consultation_fee_usd: formData.consultation_fee_usd ? parseFloat(formData.consultation_fee_usd) : null,
         online_fee: formData.online_fee ? parseFloat(formData.online_fee) : null,
+        online_fee_inr: formData.online_fee_inr ? parseFloat(formData.online_fee_inr) : null,
+        online_fee_usd: formData.online_fee_usd ? parseFloat(formData.online_fee_usd) : null,
         booking_slug: formData.booking_slug || null,
         standard_meeting_link: formData.standard_meeting_link || null,
       })
@@ -401,33 +413,88 @@ export default function SettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Consultation Fees</CardTitle>
-                <CardDescription>Set your consultation fees for different visit types</CardDescription>
+                <CardDescription>Set your consultation fees for Indian patients (₹ INR) and international patients ($ USD)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="consultation_fee">Physical Consultation Fee ($)</Label>
-                    <Input
-                      id="consultation_fee"
-                      name="consultation_fee"
-                      type="number"
-                      value={formData.consultation_fee}
-                      onChange={handleChange}
-                      placeholder="100"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="online_fee">Online Consultation Fee ($)</Label>
-                    <Input
-                      id="online_fee"
-                      name="online_fee"
-                      type="number"
-                      value={formData.online_fee}
-                      onChange={handleChange}
-                      placeholder="75"
-                    />
+                {/* Physical Consultation Fees */}
+                <div>
+                  <h4 className="font-medium text-sm text-gray-700 mb-3">Physical Consultation</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="consultation_fee_inr">Fee for Indian Patients (₹ INR)</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
+                        <Input
+                          id="consultation_fee_inr"
+                          name="consultation_fee_inr"
+                          type="number"
+                          value={formData.consultation_fee_inr}
+                          onChange={handleChange}
+                          placeholder="500"
+                          className="pl-7"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="consultation_fee_usd">Fee for International Patients ($ USD)</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                        <Input
+                          id="consultation_fee_usd"
+                          name="consultation_fee_usd"
+                          type="number"
+                          value={formData.consultation_fee_usd}
+                          onChange={handleChange}
+                          placeholder="25"
+                          className="pl-7"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
+
+                {/* Online Consultation Fees */}
+                <div>
+                  <h4 className="font-medium text-sm text-gray-700 mb-3">Online Consultation</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="online_fee_inr">Fee for Indian Patients (₹ INR)</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
+                        <Input
+                          id="online_fee_inr"
+                          name="online_fee_inr"
+                          type="number"
+                          value={formData.online_fee_inr}
+                          onChange={handleChange}
+                          placeholder="400"
+                          className="pl-7"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="online_fee_usd">Fee for International Patients ($ USD)</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                        <Input
+                          id="online_fee_usd"
+                          name="online_fee_usd"
+                          type="number"
+                          value={formData.online_fee_usd}
+                          onChange={handleChange}
+                          placeholder="20"
+                          className="pl-7"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <Alert>
+                  <AlertDescription>
+                    💡 Patients will automatically see prices in their currency based on their location. Indian patients will see ₹ INR, international patients will see $ USD.
+                  </AlertDescription>
+                </Alert>
               </CardContent>
             </Card>
 
