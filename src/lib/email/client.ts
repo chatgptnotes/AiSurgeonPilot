@@ -239,6 +239,59 @@ export const emailTemplates = {
     </html>
   `,
 
+  followUpScheduled: ({
+    patientName,
+    doctorName,
+    date,
+    time,
+    visitType,
+    notes,
+  }: {
+    patientName: string
+    doctorName: string
+    date: string
+    time: string
+    visitType: string
+    notes?: string
+  }) => `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #7c3aed; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { padding: 20px; background: #f9f9f9; }
+        .details { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #7c3aed; }
+        .notes { background: #fef3c7; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>📅 Follow-up Appointment Scheduled</h1>
+        </div>
+        <div class="content">
+          <p>Dear ${patientName},</p>
+          <p><strong>Dr. ${doctorName}</strong> has scheduled a follow-up appointment for you.</p>
+          <div class="details">
+            <p><strong>📆 Date:</strong> ${date}</p>
+            <p><strong>🕐 Time:</strong> ${time}</p>
+            <p><strong>📍 Visit Type:</strong> ${visitType === 'online' ? '💻 Online Video Consultation' : '🏥 Physical Visit'}</p>
+          </div>
+          ${notes ? `<div class="notes"><p><strong>Doctor's Notes:</strong> ${notes}</p></div>` : ''}
+          <p>Please mark this date on your calendar. ${visitType === 'online' ? 'You will receive the meeting link before your appointment.' : 'Please arrive 10 minutes before your scheduled time.'}</p>
+          <p>If you need to reschedule, please contact us in advance.</p>
+        </div>
+        <div class="footer">
+          <p>AI Surgeon Pilot - Digital Healthcare Platform</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `,
+
   appointmentCancelled: ({
     patientName,
     doctorName,

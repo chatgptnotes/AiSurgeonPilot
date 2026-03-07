@@ -63,12 +63,14 @@ export function NotificationBell() {
         link: '/appointments?status=pending',
       }))
 
-      // Fetch in-app notifications (reschedule/cancel from admin)
+      // Fetch in-app notifications for DOCTOR (reschedule/cancel from admin)
+      // Exclude notifications meant for patients (where patient_id is set)
       const { data: inAppNotifs } = await supabase
         .from('doc_notifications')
         .select('*')
         .eq('doctor_id', doctor.id)
         .eq('type', 'in_app')
+        .is('patient_id', null)  // Only show notifications FOR doctor, not for patients
         .order('created_at', { ascending: false })
         .limit(20)
 
@@ -148,7 +150,8 @@ export function NotificationBell() {
         },
         (payload: { new: Record<string, unknown> }) => {
           const notif = payload.new as Notification
-          if (notif.type === 'in_app') {
+          // Only show notifications FOR doctor (not for patients)
+          if (notif.type === 'in_app' && !notif.patient_id) {
             setNotifications(prev => [{
               id: `notif_${notif.id}`,
               type: notif.title?.includes('Cancel') ? 'cancelled' : 'rescheduled',

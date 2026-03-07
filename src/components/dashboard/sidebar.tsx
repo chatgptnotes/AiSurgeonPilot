@@ -70,27 +70,10 @@ const navItems: NavItem[] = [
         icon: Users,
       },
       {
-        title: 'WhatsApp Manager',
-        href: '/digital-office/whatsapp-manager',
-        icon: MessageSquare,
-        badge: 'NEW',
-      },
-      {
         title: 'Patient Follow-up',
         href: '/digital-office/patient-followup',
         icon: UserCheck,
         badge: 'NEW',
-      },
-      {
-        title: 'Patient Education',
-        href: '/digital-office/patient-education',
-        icon: GraduationCap,
-        badge: 'NEW',
-      },
-      {
-        title: 'Surgery Options',
-        href: '/digital-office/surgery-options',
-        icon: Stethoscope,
       },
       {
         title: 'Meeting',

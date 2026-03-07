@@ -44,6 +44,9 @@ import {
   Save,
   Stethoscope,
   X,
+  CalendarPlus,
+  CheckCircle,
+  Bell,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -210,6 +213,14 @@ export default function PatientDetailPage() {
   const [showPrintPreview, setShowPrintPreview] = useState(false)
   const [printData, setPrintData] = useState<any>(null)
   const [printType, setPrintType] = useState<'prescription' | 'consultation'>('prescription')
+
+  // Follow-up appointment state
+  const [followUpDays, setFollowUpDays] = useState('7')
+  const [followUpVisitType, setFollowUpVisitType] = useState<'online' | 'physical'>('physical')
+  const [followUpTime, setFollowUpTime] = useState('10:00')
+  const [followUpNotes, setFollowUpNotes] = useState('')
+  const [creatingFollowUp, setCreatingFollowUp] = useState(false)
+  const [followUps, setFollowUps] = useState<any[]>([])
 
   // Medication search state
   const [medSearchQuery, setMedSearchQuery] = useState<Record<string, string>>({})
@@ -808,6 +819,107 @@ export default function PatientDetailPage() {
     setShowPrintPreview(false)
   }
 
+  // ---- Follow-up Appointment Handler ----
+  const handleCreateFollowUp = async () => {
+    if (!doctor || !patient) return
+    
+    setCreatingFollowUp(true)
+    try {
+      const supabase = createClient()
+      
+      // Calculate follow-up date
+      const followUpDate = new Date()
+      followUpDate.setDate(followUpDate.getDate() + parseInt(followUpDays))
+      const dateStr = followUpDate.toISOString().split('T')[0]
+      
+      // Calculate end time (30 min appointment)
+      const [hours, minutes] = followUpTime.split(':').map(Number)
+      const endHours = minutes + 30 >= 60 ? hours + 1 : hours
+      const endMinutes = (minutes + 30) % 60
+      const endTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`
+      
+      // Get fee based on visit type
+      const fee = followUpVisitType === 'online' 
+        ? (doctor.online_fee_inr || doctor.online_fee || 0)
+        : (doctor.consultation_fee_inr || doctor.consultation_fee || 0)
+
+      // Create follow-up appointment
+      const { data: appointment, error: aptError } = await supabase
+        .from('doc_appointments')
+        .insert({
+          doctor_id: doctor.id,
+          patient_id: patient.id,
+          patient_name: `${patient.first_name} ${patient.last_name}`,
+          patient_email: patient.email,
+          patient_phone: patient.phone_number,
+          appointment_date: dateStr,
+          start_time: followUpTime,
+          end_time: endTime,
+          visit_type: followUpVisitType,
+          status: 'confirmed',
+          payment_status: 'pending',
+          amount: fee,
+          notes: followUpNotes || `Follow-up appointment scheduled ${followUpDays} days after previous visit`,
+        })
+        .select()
+        .single()
+
+      if (aptError) throw aptError
+
+      // Send email notification
+      try {
+        await fetch('/api/notifications/followup-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patientName: `${patient.first_name} ${patient.last_name}`,
+            patientEmail: patient.email,
+            doctorName: doctor.full_name,
+            date: format(followUpDate, 'MMMM d, yyyy'),
+            time: followUpTime,
+            visitType: followUpVisitType,
+            notes: followUpNotes,
+          }),
+        })
+      } catch (emailError) {
+        console.error('Email notification failed:', emailError)
+      }
+
+      // Create in-app notification for patient (in AidoCall)
+      try {
+        await supabase
+          .from('doc_notifications')
+          .insert({
+            doctor_id: doctor.id,
+            patient_id: patient.id,
+            appointment_id: appointment.id,
+            type: 'in_app',
+            channel: 'aidocall',
+            status: 'sent',
+            title: 'Follow-up Appointment Scheduled',
+            message: `Dr. ${doctor.full_name} has scheduled a follow-up appointment for you on ${format(followUpDate, 'MMMM d, yyyy')} at ${followUpTime}`,
+            sent_at: new Date().toISOString(),
+          })
+      } catch (notifError) {
+        console.error('In-app notification failed:', notifError)
+      }
+
+      // Update appointments list
+      setAppointments(prev => [appointment, ...prev])
+      
+      // Reset form
+      setFollowUpDays('7')
+      setFollowUpNotes('')
+      
+      toast.success(`Follow-up appointment scheduled for ${format(followUpDate, 'MMMM d, yyyy')} at ${followUpTime}`)
+    } catch (error: any) {
+      console.error('Error creating follow-up:', error)
+      toast.error(`Failed to create follow-up: ${error?.message || 'Unknown error'}`)
+    } finally {
+      setCreatingFollowUp(false)
+    }
+  }
+
   if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -933,6 +1045,7 @@ export default function PatientDetailPage() {
             <TabsTrigger value="consultation">Consultation Notes</TabsTrigger>
             <TabsTrigger value="prescription">Prescription</TabsTrigger>
             <TabsTrigger value="appointments">Appointments ({appointments.length})</TabsTrigger>
+            <TabsTrigger value="followup">Follow-up</TabsTrigger>
             <TabsTrigger value="documents">Documents ({documents.length + doctorDocuments.length})</TabsTrigger>
           </TabsList>
 
@@ -1693,6 +1806,189 @@ export default function PatientDetailPage() {
                       ))}
                     </TableBody>
                   </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Follow-up Tab */}
+          <TabsContent value="followup" className="space-y-6">
+            {/* Schedule Follow-up Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CalendarPlus className="h-5 w-5 text-green-600" />
+                  Schedule Follow-up Appointment
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Days after */}
+                  <div className="space-y-2">
+                    <Label>Follow-up After</Label>
+                    <Select value={followUpDays} onValueChange={setFollowUpDays}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select days" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="3">3 days</SelectItem>
+                        <SelectItem value="5">5 days</SelectItem>
+                        <SelectItem value="7">7 days (1 week)</SelectItem>
+                        <SelectItem value="10">10 days</SelectItem>
+                        <SelectItem value="14">14 days (2 weeks)</SelectItem>
+                        <SelectItem value="21">21 days (3 weeks)</SelectItem>
+                        <SelectItem value="30">30 days (1 month)</SelectItem>
+                        <SelectItem value="45">45 days</SelectItem>
+                        <SelectItem value="60">60 days (2 months)</SelectItem>
+                        <SelectItem value="90">90 days (3 months)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Visit Type */}
+                  <div className="space-y-2">
+                    <Label>Visit Type</Label>
+                    <Select value={followUpVisitType} onValueChange={(v) => setFollowUpVisitType(v as 'online' | 'physical')}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="physical">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            Physical Visit
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="online">
+                          <div className="flex items-center gap-2">
+                            <Video className="h-4 w-4" />
+                            Online Consultation
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Time */}
+                  <div className="space-y-2">
+                    <Label>Preferred Time</Label>
+                    <Select value={followUpTime} onValueChange={setFollowUpTime}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="09:00">09:00 AM</SelectItem>
+                        <SelectItem value="09:30">09:30 AM</SelectItem>
+                        <SelectItem value="10:00">10:00 AM</SelectItem>
+                        <SelectItem value="10:30">10:30 AM</SelectItem>
+                        <SelectItem value="11:00">11:00 AM</SelectItem>
+                        <SelectItem value="11:30">11:30 AM</SelectItem>
+                        <SelectItem value="12:00">12:00 PM</SelectItem>
+                        <SelectItem value="14:00">02:00 PM</SelectItem>
+                        <SelectItem value="14:30">02:30 PM</SelectItem>
+                        <SelectItem value="15:00">03:00 PM</SelectItem>
+                        <SelectItem value="15:30">03:30 PM</SelectItem>
+                        <SelectItem value="16:00">04:00 PM</SelectItem>
+                        <SelectItem value="16:30">04:30 PM</SelectItem>
+                        <SelectItem value="17:00">05:00 PM</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Follow-up date preview */}
+                  <div className="space-y-2">
+                    <Label>Scheduled Date</Label>
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-sm font-medium text-green-800">
+                        {format(new Date(Date.now() + parseInt(followUpDays) * 24 * 60 * 60 * 1000), 'EEEE, MMMM d, yyyy')}
+                      </p>
+                      <p className="text-xs text-green-600">at {followUpTime}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div className="space-y-2">
+                  <Label>Notes (Optional)</Label>
+                  <Textarea
+                    placeholder="Add any notes for this follow-up appointment..."
+                    value={followUpNotes}
+                    onChange={(e) => setFollowUpNotes(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex items-center justify-between pt-4 border-t">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Bell className="h-4 w-4" />
+                    <span>Patient will be notified via Email and AidoCall app</span>
+                  </div>
+                  <Button 
+                    onClick={handleCreateFollowUp} 
+                    disabled={creatingFollowUp}
+                    className="bg-green-600 hover:bg-green-700 gap-2"
+                  >
+                    {creatingFollowUp ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CalendarPlus className="h-4 w-4" />
+                    )}
+                    {creatingFollowUp ? 'Scheduling...' : 'Schedule Follow-up'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Upcoming Follow-ups */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-blue-500" />
+                  Scheduled Appointments
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {appointments.filter(apt => apt.status === 'confirmed' || apt.status === 'pending').length === 0 ? (
+                  <div className="text-center py-8">
+                    <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p className="text-gray-500">No upcoming appointments</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {appointments
+                      .filter(apt => apt.status === 'confirmed' || apt.status === 'pending')
+                      .slice(0, 5)
+                      .map(apt => (
+                        <div key={apt.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-4">
+                            <div className={`p-2 rounded-lg ${apt.visit_type === 'online' ? 'bg-blue-100' : 'bg-orange-100'}`}>
+                              {apt.visit_type === 'online' ? (
+                                <Video className="h-5 w-5 text-blue-600" />
+                              ) : (
+                                <MapPin className="h-5 w-5 text-orange-600" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-medium">
+                                {format(new Date(apt.appointment_date), 'EEEE, MMMM d, yyyy')}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                {apt.start_time} - {apt.end_time} • {apt.visit_type === 'online' ? 'Online' : 'Physical'} Visit
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge className={statusColors[apt.status]}>{apt.status}</Badge>
+                            {apt.notes && apt.notes.includes('Follow-up') && (
+                              <Badge variant="outline" className="text-green-600 border-green-300">
+                                Follow-up
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
                 )}
               </CardContent>
             </Card>

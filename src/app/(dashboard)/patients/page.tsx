@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Header } from '@/components/dashboard/header'
 import { Card, CardContent } from '@/components/ui/card'
@@ -19,11 +20,12 @@ interface PatientWithSelection extends Patient {
   allergies?: PatientAllergy[]
 }
 
-export default function PatientsPage() {
+function PatientsContent() {
+  const searchParams = useSearchParams()
   const { doctor, isLoading: authLoading } = useAuth()
   const [patients, setPatients] = useState<PatientWithSelection[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '')
 
   useEffect(() => {
     const fetchPatients = async () => {
@@ -354,5 +356,17 @@ export default function PatientsPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function PatientsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600" />
+      </div>
+    }>
+      <PatientsContent />
+    </Suspense>
   )
 }
