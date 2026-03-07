@@ -161,26 +161,62 @@ export default function DashboardPage() {
           .gte('appointment_date', format(lastWeekStart, 'yyyy-MM-dd'))
           .lt('appointment_date', format(weekStart, 'yyyy-MM-dd'))
 
-        // Get month's revenue
-        const { data: revenueData } = await supabase
+        // Get month's revenue - convert all to USD
+        const INR_TO_USD = 85
+        const { data: revenueData, error: revError } = await supabase
           .from('doc_appointments')
-          .select('amount')
+          .select('amount, patient_id')
           .eq('doctor_id', doctor.id)
           .eq('payment_status', 'paid')
           .gte('appointment_date', format(monthStart, 'yyyy-MM-dd'))
 
-        const monthRevenue = revenueData?.reduce((sum: number, row: { amount: number | null }) => sum + (row.amount || 0), 0) || 0
+        // Fetch patient residency for currency detection
+        let patientCurrencyMap: Record<string, boolean> = {}
+        if (revenueData && revenueData.length > 0) {
+          const patientIds = [...new Set(revenueData.map((r: any) => r.patient_id).filter(Boolean))]
+          if (patientIds.length > 0) {
+            const { data: patients } = await supabase
+              .from('doc_patients')
+              .select('id, is_indian_resident')
+              .in('id', patientIds)
+            patients?.forEach((p: any) => { patientCurrencyMap[p.id] = p.is_indian_resident })
+          }
+        }
+
+        const monthRevenue = Math.round((revenueData?.reduce((sum: number, row: any) => {
+          const amount = row.amount || 0
+          const isIndian = patientCurrencyMap[row.patient_id]
+          // Indian patients paid in INR, convert to USD. Others already in USD.
+          return sum + (isIndian === true ? amount / INR_TO_USD : amount)
+        }, 0) || 0) * 100) / 100
 
         // Get last month's revenue for comparison
         const { data: lastMonthRevenueData } = await supabase
           .from('doc_appointments')
-          .select('amount')
+          .select('amount, patient_id')
           .eq('doctor_id', doctor.id)
           .eq('payment_status', 'paid')
           .gte('appointment_date', format(lastMonthStart, 'yyyy-MM-dd'))
           .lte('appointment_date', format(lastMonthEnd, 'yyyy-MM-dd'))
 
-        const lastMonthRevenue = lastMonthRevenueData?.reduce((sum: number, row: { amount: number | null }) => sum + (row.amount || 0), 0) || 0
+        // Fetch patient residency for last month too
+        if (lastMonthRevenueData && lastMonthRevenueData.length > 0) {
+          const lastPatientIds: string[] = [...new Set(lastMonthRevenueData.map((r: any) => r.patient_id).filter(Boolean))] as string[]
+          const missingIds = lastPatientIds.filter(id => !(id in patientCurrencyMap))
+          if (missingIds.length > 0) {
+            const { data: patients } = await supabase
+              .from('doc_patients')
+              .select('id, is_indian_resident')
+              .in('id', missingIds)
+            patients?.forEach((p: any) => { patientCurrencyMap[p.id] = p.is_indian_resident })
+          }
+        }
+
+        const lastMonthRevenue = Math.round((lastMonthRevenueData?.reduce((sum: number, row: any) => {
+          const amount = row.amount || 0
+          const isIndian = patientCurrencyMap[row.patient_id]
+          return sum + (isIndian === true ? amount / INR_TO_USD : amount)
+        }, 0) || 0) * 100) / 100
 
         setStats({
           totalPatients: uniquePatients.size || 0,
@@ -479,7 +515,7 @@ export default function DashboardPage() {
                     <span className="text-gray-600 text-sm">Revenue This Month</span>
                   </div>
                   <p className="text-3xl font-bold text-gray-900 mb-1">
-                    {loadingStats ? '-' : `₹${stats.monthRevenue.toLocaleString()}`}
+                    {loadingStats ? '-' : `$${stats.monthRevenue.toLocaleString()}`}
                   </p>
                   <p className="text-sm">
                     <span className={revenueChange >= 0 ? 'text-green-500' : 'text-red-500'}>

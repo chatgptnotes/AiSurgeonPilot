@@ -62,6 +62,7 @@ export default function AppointmentsPage() {
   const [doctorAvailability, setDoctorAvailability] = useState<Availability[]>([])
   const [doctorOverrides, setDoctorOverrides] = useState<AvailabilityOverride[]>([])
   const [existingBookings, setExistingBookings] = useState<Appointment[]>([])
+  const [patientResidency, setPatientResidency] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -83,7 +84,7 @@ export default function AppointmentsPage() {
 
       setAppointments(data || [])
 
-      // Fetch allergies for registered patients
+      // Fetch allergies and residency for registered patients
       const patientIds = (data || [])
         .filter((apt: Appointment) => apt.patient_id)
         .map((apt: Appointment) => apt.patient_id as string)
@@ -104,6 +105,17 @@ export default function AppointmentsPage() {
             allergiesMap[allergy.patient_id].push(allergy)
           })
           setPatientAllergies(allergiesMap)
+        }
+
+        // Fetch patient residency for currency display
+        const { data: patientsData } = await supabase
+          .from('doc_patients')
+          .select('id, is_indian_resident')
+          .in('id', uniquePatientIds)
+        if (patientsData) {
+          const resMap: Record<string, boolean> = {}
+          patientsData.forEach((p: any) => { resMap[p.id] = p.is_indian_resident })
+          setPatientResidency(resMap)
         }
       }
 
@@ -449,7 +461,7 @@ export default function AppointmentsPage() {
           {appointment.payment_status}
         </Badge>
       </TableCell>
-      <TableCell>${appointment.amount}</TableCell>
+      <TableCell>{patientResidency[appointment.patient_id || ''] === true ? `₹${appointment.amount}` : `$${appointment.amount}`}</TableCell>
       <TableCell>
         <div className="flex items-center gap-2 flex-wrap">
           {appointment.status === 'pending' && (
