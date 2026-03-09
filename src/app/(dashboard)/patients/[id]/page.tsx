@@ -1833,7 +1833,7 @@ export default function PatientDetailPage() {
                           <TableCell>
                             <Badge className={statusColors[apt.status]}>{apt.status}</Badge>
                           </TableCell>
-                          <TableCell>{patient?.is_indian_resident ? `₹${apt.amount}` : `$${apt.amount}`}</TableCell>
+                          <TableCell>{(patient as any)?.is_indian_resident ? `₹${apt.amount}` : `$${apt.amount}`}</TableCell>
                           <TableCell>
                             <span className="text-sm text-gray-500 truncate max-w-[200px] block">
                               {apt.notes || '-'}

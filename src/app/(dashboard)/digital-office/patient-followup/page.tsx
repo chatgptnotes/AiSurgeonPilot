@@ -101,7 +101,7 @@ export default function PatientFollowupPage() {
 
     // Deduplicate by email
     const seen = new Set<string>()
-    const unique = (data || []).filter((p) => {
+    const unique = (data || []).filter((p: PatientOption) => {
       const key = p.patient_email || p.patient_name
       if (seen.has(key)) return false
       seen.add(key)
