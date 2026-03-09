@@ -133,10 +133,12 @@ export default function CalendarPage() {
           // Group availability records by day_of_week
           availData.forEach((avail: Availability) => {
             newSchedules[avail.day_of_week].is_active = true
+            // Trim seconds from DB time format (e.g. "09:00:00" -> "09:00")
+            const trimTime = (t: string) => t ? t.substring(0, 5) : t
             newSchedules[avail.day_of_week].time_slots.push({
               id: avail.id,
-              start_time: avail.start_time,
-              end_time: avail.end_time,
+              start_time: trimTime(avail.start_time),
+              end_time: trimTime(avail.end_time),
               slot_duration: avail.slot_duration,
               visit_type: avail.visit_type,
             })

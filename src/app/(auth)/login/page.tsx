@@ -4,12 +4,7 @@ import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, AlertCircle } from 'lucide-react'
+import { Loader2, Mail, Lock, AlertCircle } from 'lucide-react'
 
 function LoginForm() {
   const router = useRouter()
@@ -89,22 +84,38 @@ function LoginForm() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Welcome Back</CardTitle>
-        <CardDescription>Sign in to your account</CardDescription>
-      </CardHeader>
-      <form onSubmit={handleLogin}>
-        <CardContent className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
+    <div>
+      {/* Logo */}
+      <div className="mb-10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-green-600 rounded-xl flex items-center justify-center">
+            <span className="text-white font-bold text-lg">AI</span>
+          </div>
+          <span className="text-xl font-bold text-gray-900">AI Surgeon Pilot</span>
+        </div>
+      </div>
+
+      {/* Welcome Text */}
+      <h2 className="text-3xl font-bold text-gray-900">Welcome Back</h2>
+      <p className="mt-2 text-gray-500">Please enter your details to sign in</p>
+
+      {/* Error */}
+      {error && (
+        <div className="mt-6 flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+          <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* Form */}
+      <form onSubmit={handleLogin} className="mt-8 space-y-5">
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
+            Email Address
+          </label>
+          <div className="relative">
+            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <input
               id="email"
               type="email"
               placeholder="doctor@example.com"
@@ -112,11 +123,18 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={isLoading}
+              className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all disabled:opacity-50"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
+        </div>
+
+        <div>
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
+            Password
+          </label>
+          <div className="relative">
+            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <input
               id="password"
               type="password"
               placeholder="Enter your password"
@@ -124,55 +142,59 @@ function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={isLoading}
+              className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all disabled:opacity-50"
             />
           </div>
-          <div className="text-right">
-            <Link
-              href="/forgot-password"
-              className="text-sm text-green-600 hover:text-green-700"
-            >
-              Forgot password?
-            </Link>
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button
-            type="submit"
-            className="w-full bg-green-600 hover:bg-green-700"
-            disabled={isLoading}
+        </div>
+
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500" />
+            <span className="text-sm text-gray-600">Remember me</span>
+          </label>
+          <Link
+            href="/forgot-password"
+            className="text-sm font-medium text-green-600 hover:text-green-700"
           >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in...
-              </>
-            ) : (
-              'Sign In'
-            )}
-          </Button>
-        </CardFooter>
+            Forgot password?
+          </Link>
+        </div>
+
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full py-3.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow-lg shadow-green-600/25 hover:shadow-xl hover:shadow-green-600/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Signing in...
+            </>
+          ) : (
+            'Sign In'
+          )}
+        </button>
       </form>
-      <div className="px-6 pb-6 text-center text-sm text-gray-600">
+
+      <p className="mt-8 text-center text-sm text-gray-500">
         Don&apos;t have an account?{' '}
         <a
           href="/request-account"
-          className="text-green-600 hover:text-green-700 font-medium cursor-pointer"
+          className="text-green-600 hover:text-green-700 font-semibold"
         >
           Request Access
         </a>
-      </div>
-    </Card>
+      </p>
+    </div>
   )
 }
 
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <Card>
-        <CardContent className="p-8 flex items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin" />
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+      </div>
     }>
       <LoginForm />
     </Suspense>

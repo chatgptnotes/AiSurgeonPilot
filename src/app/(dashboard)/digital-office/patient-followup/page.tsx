@@ -16,8 +16,13 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { Plus, Calendar as CalendarIcon, Check, X, Loader2, UserCheck, Clock } from 'lucide-react'
+import { Plus, Calendar as CalendarIcon, Check, X, Loader2, UserCheck, Clock, Search } from 'lucide-react'
 import type { Followup } from '@/types/database'
+
+interface PatientOption {
+  patient_name: string
+  patient_email: string
+}
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -37,6 +42,10 @@ export default function PatientFollowupPage() {
     patientEmail: '',
     notes: '',
   })
+  const [patientSearch, setPatientSearch] = useState('')
+  const [patientOptions, setPatientOptions] = useState<PatientOption[]>([])
+  const [searchingPatients, setSearchingPatients] = useState(false)
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false)
 
   useEffect(() => {
     const fetchFollowups = async () => {
@@ -64,6 +73,55 @@ export default function PatientFollowupPage() {
     }
   }, [doctor])
 
+  const searchPatients = async (query: string) => {
+    setPatientSearch(query)
+    if (!doctor || query.length < 2) {
+      setPatientOptions([])
+      setShowPatientDropdown(false)
+      return
+    }
+
+    setSearchingPatients(true)
+    const supabase = createClient()
+
+    const { data, error } = await supabase
+      .from('doc_appointments')
+      .select('patient_name, patient_email')
+      .eq('doctor_id', doctor.id)
+      .ilike('patient_name', `%${query}%`)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    setSearchingPatients(false)
+
+    if (error) {
+      setPatientOptions([])
+      return
+    }
+
+    // Deduplicate by email
+    const seen = new Set<string>()
+    const unique = (data || []).filter((p) => {
+      const key = p.patient_email || p.patient_name
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    setPatientOptions(unique)
+    setShowPatientDropdown(unique.length > 0)
+  }
+
+  const selectPatient = (patient: PatientOption) => {
+    setNewFollowup(p => ({
+      ...p,
+      patientName: patient.patient_name,
+      patientEmail: patient.patient_email || '',
+    }))
+    setPatientSearch(patient.patient_name)
+    setShowPatientDropdown(false)
+  }
+
   const handleCreateFollowup = async () => {
     if (!doctor || !selectedDate || !newFollowup.patientName) {
       toast.error('Please fill in all required fields')
@@ -73,11 +131,41 @@ export default function PatientFollowupPage() {
     setSaving(true)
     const supabase = createClient()
 
+    // 1. Create appointment in doc_appointments with pending payment so patient can pay to confirm
+    const appointmentDate = format(selectedDate, 'yyyy-MM-dd')
+    const consultationFee = doctor.consultation_fee || doctor.online_fee || 0
+    const { data: appointment, error: appointmentError } = await supabase
+      .from('doc_appointments')
+      .insert({
+        doctor_id: doctor.id,
+        patient_name: newFollowup.patientName,
+        patient_email: newFollowup.patientEmail || '',
+        appointment_date: appointmentDate,
+        start_time: '09:00',
+        end_time: '09:30',
+        visit_type: 'online',
+        status: 'pending',
+        payment_status: 'pending',
+        amount: consultationFee,
+        notes: `[Follow-up] ${newFollowup.notes || ''}`.trim(),
+      })
+      .select()
+      .single()
+
+    if (appointmentError) {
+      setSaving(false)
+      toast.error('Failed to create follow-up appointment')
+      console.error(appointmentError)
+      return
+    }
+
+    // 2. Create follow-up record linked to the appointment
     const { data, error } = await supabase
       .from('doc_followups')
       .insert({
         doctor_id: doctor.id,
-        followup_date: format(selectedDate, 'yyyy-MM-dd'),
+        appointment_id: appointment.id,
+        followup_date: appointmentDate,
         notes: `Patient: ${newFollowup.patientName}\nEmail: ${newFollowup.patientEmail}\n\n${newFollowup.notes}`,
         status: 'pending',
       })
@@ -87,15 +175,18 @@ export default function PatientFollowupPage() {
     setSaving(false)
 
     if (error) {
-      toast.error('Failed to create follow-up')
+      toast.error('Failed to create follow-up record')
       return
     }
 
     setFollowups(prev => [...prev, data])
     setShowDialog(false)
     setNewFollowup({ patientName: '', patientEmail: '', notes: '' })
+    setPatientSearch('')
+    setPatientOptions([])
+    setShowPatientDropdown(false)
     setSelectedDate(undefined)
-    toast.success('Follow-up scheduled')
+    toast.success('Follow-up scheduled and added to appointments')
   }
 
   const updateStatus = async (id: string, status: 'completed' | 'cancelled') => {
@@ -200,21 +291,56 @@ export default function PatientFollowupPage() {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>Patient Name *</Label>
-                    <Input
-                      placeholder="John Doe"
-                      value={newFollowup.patientName}
-                      onChange={(e) => setNewFollowup(p => ({ ...p, patientName: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Patient Email</Label>
-                    <Input
-                      type="email"
-                      placeholder="john@example.com"
-                      value={newFollowup.patientEmail}
-                      onChange={(e) => setNewFollowup(p => ({ ...p, patientEmail: e.target.value }))}
-                    />
+                    <Label>Search Patient *</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        placeholder="Type patient name to search..."
+                        value={patientSearch}
+                        onChange={(e) => searchPatients(e.target.value)}
+                        onFocus={() => patientOptions.length > 0 && setShowPatientDropdown(true)}
+                        className="pl-9"
+                      />
+                      {searchingPatients && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-gray-400" />
+                      )}
+                      {showPatientDropdown && (
+                        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          {patientOptions.map((patient, idx) => (
+                            <button
+                              key={`${patient.patient_email || patient.patient_name}-${idx}`}
+                              type="button"
+                              className="w-full text-left px-4 py-2.5 hover:bg-green-50 flex items-center justify-between transition-colors"
+                              onClick={() => selectPatient(patient)}
+                            >
+                              <span className="font-medium text-sm text-gray-800">{patient.patient_name}</span>
+                              {patient.patient_email && (
+                                <span className="text-xs text-gray-400">{patient.patient_email}</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {newFollowup.patientName && (
+                      <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 px-3 py-2 rounded-lg">
+                        <UserCheck className="h-4 w-4" />
+                        <span>{newFollowup.patientName}</span>
+                        {newFollowup.patientEmail && (
+                          <span className="text-green-500">({newFollowup.patientEmail})</span>
+                        )}
+                        <button
+                          type="button"
+                          className="ml-auto text-green-400 hover:text-red-500"
+                          onClick={() => {
+                            setNewFollowup(p => ({ ...p, patientName: '', patientEmail: '' }))
+                            setPatientSearch('')
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Follow-up Date *</Label>

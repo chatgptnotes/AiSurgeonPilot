@@ -891,7 +891,7 @@ export default function PatientDetailPage() {
           start_time: followUpTime,
           end_time: endTime,
           visit_type: followUpVisitType,
-          status: 'confirmed',
+          status: 'pending',
           payment_status: 'pending',
           amount: fee,
           notes: followUpNotes || `Follow-up appointment scheduled ${followUpDays} days after previous visit`,
@@ -1833,7 +1833,7 @@ export default function PatientDetailPage() {
                           <TableCell>
                             <Badge className={statusColors[apt.status]}>{apt.status}</Badge>
                           </TableCell>
-                          <TableCell>${apt.amount}</TableCell>
+                          <TableCell>{patient?.is_indian_resident ? `₹${apt.amount}` : `$${apt.amount}`}</TableCell>
                           <TableCell>
                             <span className="text-sm text-gray-500 truncate max-w-[200px] block">
                               {apt.notes || '-'}

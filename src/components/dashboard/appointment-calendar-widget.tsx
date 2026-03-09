@@ -146,15 +146,14 @@ export function AppointmentCalendarWidget() {
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="gap-2 relative">
-          <CalendarDays className="h-4 w-4" />
-          <span className="hidden sm:inline">View Calendar</span>
+        <button type="button" className="relative h-9 w-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+          <CalendarDays className="h-5 w-5 text-gray-700" />
           {stats.today > 0 && (
             <Badge className="absolute -top-2 -right-2 h-5 min-w-[20px] flex items-center justify-center bg-green-600 hover:bg-green-600 text-white text-xs px-1.5">
               {stats.today}
             </Badge>
           )}
-        </Button>
+        </button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="end" sideOffset={8}>
         <div className="p-4 space-y-4">

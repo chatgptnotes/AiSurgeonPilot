@@ -22,6 +22,8 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import Link from 'next/link'
+import { NotificationBell } from '@/components/dashboard/notification-bell'
+import { AppointmentCalendarWidget } from '@/components/dashboard/appointment-calendar-widget'
 import { format, addDays, startOfWeek, isSameDay } from 'date-fns'
 
 interface DashboardStats {
@@ -371,9 +373,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen overflow-x-hidden">
       {/* Main Content */}
-      <div className="flex-1 p-6 lg:pr-96">
+      <div className="flex-1 p-6 lg:pr-[336px]">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -383,14 +385,8 @@ export default function DashboardPage() {
             <p className="text-gray-500">Save the person who needs your help!</p>
           </div>
           <div className="flex items-center gap-3">
-            <button className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors">
-              <Bell className="h-5 w-5 text-gray-600" />
-            </button>
-            <Link href="/settings">
-              <button className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors">
-                <Settings className="h-5 w-5 text-gray-600" />
-              </button>
-            </Link>
+            <NotificationBell />
+            <AppointmentCalendarWidget />
           </div>
         </div>
 
@@ -615,7 +611,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Right Sidebar - Appointments */}
-      <div className="hidden lg:block fixed right-0 top-0 h-screen w-80 bg-slate-800 text-white overflow-y-auto">
+      <div className="hidden lg:block fixed right-0 top-0 h-screen w-80 bg-slate-800 text-white overflow-y-auto overflow-x-hidden">
         <div className="p-5">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -643,12 +639,12 @@ export default function DashboardPage() {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <div className="flex gap-2">
+            <div className="flex gap-1">
               {weekDates.map((date, index) => (
                 <button
                   key={index}
                   onClick={() => setSelectedDate(date)}
-                  className={`w-10 h-12 rounded-lg flex flex-col items-center justify-center text-xs transition-colors ${
+                  className={`w-8 h-11 rounded-lg flex flex-col items-center justify-center text-xs transition-colors ${
                     isSameDay(date, selectedDate)
                       ? 'bg-green-500 text-white'
                       : 'hover:bg-slate-700 text-slate-300'

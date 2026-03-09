@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/hooks/use-auth'
-import { SidebarCalendarStats } from './sidebar-calendar-stats'
 import {
   LayoutDashboard,
   Calendar,
@@ -55,7 +54,7 @@ const navItems: NavItem[] = [
     icon: CalendarCheck,
   },
   {
-    title: 'Calendar',
+    title: 'Slot Management',
     href: '/calendar',
     icon: Calendar,
     badge: 'NEW',
@@ -88,7 +87,7 @@ const navItems: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname()
   const { doctor, signOut } = useAuth()
-  const [expandedItems, setExpandedItems] = useState<string[]>(['Digital Doctor Office'])
+  const [expandedItems, setExpandedItems] = useState<string[]>([])
   const [isMobileOpen, setIsMobileOpen] = useState(false)
 
   const toggleExpanded = (title: string) => {
@@ -185,11 +184,6 @@ export function Sidebar() {
             </p>
           </div>
         </div>
-      </div>
-
-      {/* Calendar Stats */}
-      <div className="border-b py-2">
-        <SidebarCalendarStats />
       </div>
 
       {/* Navigation */}

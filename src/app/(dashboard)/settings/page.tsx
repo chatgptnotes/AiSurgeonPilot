@@ -254,8 +254,8 @@ export default function SettingsPage() {
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="practice">Practice Details</TabsTrigger>
             <TabsTrigger value="booking">Booking Settings</TabsTrigger>
-            <TabsTrigger value="integrations">Integrations</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
+            {/* <TabsTrigger value="integrations">Integrations</TabsTrigger> */}
+            {/* <TabsTrigger value="notifications">Notifications</TabsTrigger> */}
           </TabsList>
 
           <TabsContent value="profile" className="space-y-6">
